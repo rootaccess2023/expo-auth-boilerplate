@@ -1,8 +1,8 @@
 import { Image } from "expo-image";
 import { Button, Platform, StyleSheet } from "react-native";
 
-import { logout } from "@/app/api/client";
-import { useAuth } from "@/app/context/AuthContext";
+import { logout } from "@/lib/api/client";
+import { useAuth } from "@/lib/context/AuthContext";
 import { HelloWave } from "@/components/hello-wave";
 import ParallaxScrollView from "@/components/parallax-scroll-view";
 import { ThemedText } from "@/components/themed-text";

@@ -6,7 +6,7 @@ import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { AuthProvider, useAuth } from '@/app/context/AuthContext';
+import { AuthProvider, useAuth } from '@/lib/context/AuthContext';
 
 function RootNavigator() {
   const colorScheme = useColorScheme();

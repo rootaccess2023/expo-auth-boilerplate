@@ -1,126 +1,224 @@
-import { Image } from "expo-image";
-import { Platform, StyleSheet } from "react-native";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+} from "react-native";
 
-import { ExternalLink } from "@/components/external-link";
-import ParallaxScrollView from "@/components/parallax-scroll-view";
+import { createJobApplication } from "@/lib/api/job-applications";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Collapsible } from "@/components/ui/collapsible";
-import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Fonts } from "@/constants/theme";
 
 export default function AddScreen() {
+  const [jobTitle, setJobTitle] = useState("");
+  const [company, setCompany] = useState("");
+  const [jobUrl, setJobUrl] = useState("");
+  const [location, setLocation] = useState("");
+  const [source, setSource] = useState("LinkedIn");
+  const [stage, setStage] = useState("Prospect");
+  const [notes, setNotes] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const resetForm = () => {
+    setJobTitle("");
+    setCompany("");
+    setJobUrl("");
+    setLocation("");
+    setSource("LinkedIn");
+    setStage("Prospect");
+    setNotes("");
+  };
+
+  const handleSave = async () => {
+    if (!jobTitle.trim() || !company.trim()) {
+      Alert.alert("Missing fields", "Job title and company are required.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await createJobApplication({
+        company,
+        job_title: jobTitle,
+        job_url: jobUrl,
+        location,
+        source,
+        stage,
+        notes,
+      });
+
+      Alert.alert("Success", "Application saved successfully.");
+
+      setJobTitle("");
+      setCompany("");
+      setJobUrl("");
+      setLocation("");
+      setSource("LinkedIn");
+      setStage("Prospect");
+      setNotes("");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Something went wrong.";
+      Alert.alert("Error", message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: "#D0D0D0", dark: "#353636" }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }
-    >
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}
-        >
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>
-        This app includes example code to help you get started.
+    <ScrollView contentContainerStyle={styles.container}>
+      <ThemedText type="title" style={styles.title}>
+        Add Application
       </ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{" "}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText>{" "}
-          and{" "}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in{" "}
-          <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{" "}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the
-          web version, press <ThemedText type="defaultSemiBold">w</ThemedText>{" "}
-          in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the{" "}
-          <ThemedText type="defaultSemiBold">@2x</ThemedText> and{" "}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to
-          provide files for different screen densities
-        </ThemedText>
-        <Image
-          source={require("@/assets/images/react-logo.png")}
-          style={{ width: 100, height: 100, alignSelf: "center" }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{" "}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook
-          lets you inspect what the user&apos;s current color scheme is, and so
-          you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{" "}
-          <ThemedText type="defaultSemiBold">
-            components/HelloWave.tsx
-          </ThemedText>{" "}
-          component uses the powerful{" "}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{" "}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The{" "}
-              <ThemedText type="defaultSemiBold">
-                components/ParallaxScrollView.tsx
-              </ThemedText>{" "}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+
+      <ThemedView style={styles.form}>
+        <Field label="Job Title">
+          <TextInput
+            value={jobTitle}
+            onChangeText={setJobTitle}
+            placeholder="Software Engineer"
+            style={styles.input}
+          />
+        </Field>
+
+        <Field label="Company">
+          <TextInput
+            value={company}
+            onChangeText={setCompany}
+            placeholder="Google"
+            style={styles.input}
+          />
+        </Field>
+
+        <Field label="Job URL">
+          <TextInput
+            value={jobUrl}
+            onChangeText={setJobUrl}
+            placeholder="https://..."
+            autoCapitalize="none"
+            keyboardType="url"
+            style={styles.input}
+          />
+        </Field>
+
+        <Field label="Location">
+          <TextInput
+            value={location}
+            onChangeText={setLocation}
+            placeholder="Remote"
+            style={styles.input}
+          />
+        </Field>
+
+        <Field label="Source">
+          <TextInput
+            value={source}
+            onChangeText={setSource}
+            placeholder="LinkedIn"
+            style={styles.input}
+          />
+        </Field>
+
+        <Field label="Stage">
+          <TextInput
+            value={stage}
+            onChangeText={setStage}
+            placeholder="Prospect"
+            style={styles.input}
+          />
+        </Field>
+
+        <Field label="Notes">
+          <TextInput
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Add notes here..."
+            multiline
+            textAlignVertical="top"
+            style={[styles.input, styles.textArea]}
+          />
+        </Field>
+
+        <Pressable
+          style={[styles.button, loading && styles.buttonDisabled]}
+          onPress={handleSave}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <ThemedText style={styles.buttonText}>Save</ThemedText>
+          )}
+        </Pressable>
+      </ThemedView>
+    </ScrollView>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <ThemedView style={styles.field}>
+      <ThemedText style={styles.label}>{label}</ThemedText>
+      {children}
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: "#808080",
-    bottom: -90,
-    left: -35,
-    position: "absolute",
+  container: {
+    padding: 20,
+    paddingBottom: 40,
   },
-  titleContainer: {
-    flexDirection: "row",
+  title: {
+    marginBottom: 20,
+    fontFamily: Fonts.rounded,
+  },
+  form: {
+    gap: 16,
+  },
+  field: {
     gap: 8,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    backgroundColor: "#FFFFFF",
+  },
+  textArea: {
+    minHeight: 120,
+  },
+  button: {
+    marginTop: 8,
+    backgroundColor: "#111827",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  buttonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

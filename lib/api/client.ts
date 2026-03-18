@@ -16,7 +16,7 @@ interface RequestOptions extends RequestInit {
   headers?: Record<string, string>;
 }
 
-const request = async <T>(
+export const request = async <T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> => {

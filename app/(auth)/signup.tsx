@@ -1,5 +1,5 @@
-import { signup } from "@/app/api/client";
-import { useAuth } from "@/app/context/AuthContext";
+import { signup } from "@/lib/api/client";
+import { useAuth } from "@/lib/context/AuthContext";
 import { Link, RelativePathString } from "expo-router";
 import { useState } from "react";
 import { Alert, Button, StyleSheet, Text, TextInput, View } from "react-native";
