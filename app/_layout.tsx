@@ -44,6 +44,10 @@ function RootNavigator() {
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
+          name="applications/[slug]"
+          options={{ title: "Application" }}
+        />
+        <Stack.Screen
           name="add-modal"
           options={{ presentation: "modal", title: "Add Application" }}
         />

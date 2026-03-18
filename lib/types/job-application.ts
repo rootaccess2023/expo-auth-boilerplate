@@ -1,5 +1,6 @@
 export interface JobApplication {
   id: number;
+  slug: string;
   company: string;
   job_title: string;
   job_url: string;
@@ -22,5 +23,9 @@ export type CreateJobApplicationPayload = {
 };
 
 export interface CreateJobApplicationResponse {
+  job_application: JobApplication;
+}
+
+export interface GetJobApplicationResponse {
   job_application: JobApplication;
 }

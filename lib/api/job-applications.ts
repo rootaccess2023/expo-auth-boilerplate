@@ -1,6 +1,7 @@
 import type {
   CreateJobApplicationPayload,
   CreateJobApplicationResponse,
+  GetJobApplicationResponse,
   JobApplication,
 } from "../types/job-application";
 import { request } from "./client";
@@ -19,3 +20,6 @@ export interface GetJobApplicationsResponse {
 
 export const getJobApplications = () =>
   request<GetJobApplicationsResponse>("/api/v1/job_applications");
+
+export const getJobApplication = (slug: string) =>
+  request<GetJobApplicationResponse>(`/api/v1/job_applications/${slug}`);
