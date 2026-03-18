@@ -1,4 +1,7 @@
 import * as SecureStore from "expo-secure-store";
+import type { AuthResponse, MeResponse } from "../types/auth";
+
+export type { User, AuthResponse, MeResponse } from "../types/auth";
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 const TOKEN_KEY = "auth_token";
@@ -33,20 +36,6 @@ export const request = async <T>(
   if (!res.ok) throw data;
   return data as T;
 };
-
-export interface User {
-  id: number;
-  email: string;
-}
-
-export interface AuthResponse {
-  token: string;
-  user: User;
-}
-
-export interface MeResponse {
-  user: User;
-}
 
 export const login = (email: string, password: string): Promise<AuthResponse> =>
   request<AuthResponse>("/api/v1/login", {

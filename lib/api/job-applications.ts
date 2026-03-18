@@ -1,17 +1,13 @@
 import { request } from "./client";
+import type {
+  CreateJobApplicationPayload,
+  CreateJobApplicationResponse,
+} from "../types/job-application";
 
-export type CreateJobApplicationPayload = {
-  company: string;
-  job_title: string;
-  job_url: string;
-  location: string;
-  source: string;
-  stage: string;
-  notes: string;
-};
+export type { CreateJobApplicationPayload } from "../types/job-application";
 
 export const createJobApplication = (payload: CreateJobApplicationPayload) =>
-  request("/api/v1/job_applications", {
+  request<CreateJobApplicationResponse>("/api/v1/job_applications", {
     method: "POST",
     body: JSON.stringify({ job_application: payload }),
   });

@@ -5,7 +5,8 @@ import {
   useEffect,
   useState,
 } from "react";
-import { deleteToken, getMe, getToken, saveToken, User } from "../api/client";
+import { deleteToken, getMe, getToken, saveToken } from "../api/client";
+import type { User } from "../types/auth";
 
 interface AuthContextType {
   user: User | null;
