@@ -12,15 +12,17 @@ import {
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useThemeColor } from "@/hooks/use-theme-color";
-import { getJobApplications } from "@/lib/api/job-applications";
+import {
+  getJobApplications,
+  getApplicationEvents,
+} from "@/lib/api/job-applications";
 import type { JobApplication } from "@/lib/types/job-application";
 
 const FILTERS = [
   "All",
   "Prospect",
   "Applied",
-  "Assessment",
-  "Interview",
+  "In Process",
   "Offer",
   "Rejected",
   "Archived",
@@ -31,8 +33,7 @@ type Filter = (typeof FILTERS)[number];
 const STAGE_COLORS: Record<string, { bg: string; text: string }> = {
   Prospect: { bg: "#FEF3C7", text: "#D97706" },
   Applied: { bg: "#F3F4F6", text: "#6B7280" },
-  Assessment: { bg: "#E0E7FF", text: "#4338CA" },
-  Interview: { bg: "#DBEAFE", text: "#1D4ED8" },
+  "In Process": { bg: "#DBEAFE", text: "#1D4ED8" },
   Offer: { bg: "#D1FAE5", text: "#059669" },
   Rejected: { bg: "#FEE2E2", text: "#DC2626" },
   Archived: { bg: "#E5E7EB", text: "#4B5563" },
@@ -43,6 +44,9 @@ export default function ApplicationsScreen() {
 
   const [activeFilter, setActiveFilter] = useState<Filter>("All");
   const [applications, setApplications] = useState<JobApplication[]>([]);
+  const [latestEventType, setLatestEventType] = useState<
+    Record<string, string>
+  >({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -65,6 +69,33 @@ export default function ApplicationsScreen() {
           : Promise.resolve(),
       ]);
       setApplications(data.job_applications);
+
+      const inProcessApps = data.job_applications.filter(
+        (app) => app.stage === "In Process",
+      );
+      const eventResults = await Promise.all(
+        inProcessApps.map(async (app) => {
+          try {
+            const res = await getApplicationEvents(app.slug);
+            return res.events.map((event) => ({ event, slug: app.slug }));
+          } catch {
+            return [];
+          }
+        }),
+      );
+      const eventTypeMap: Record<string, string> = {};
+      for (const { event, slug } of eventResults.flat()) {
+        if (
+          event.event_type === "interview" ||
+          event.event_type === "assessment"
+        ) {
+          const existing = eventTypeMap[slug];
+          if (!existing || event.event_type === "interview") {
+            eventTypeMap[slug] = event.event_type;
+          }
+        }
+      }
+      setLatestEventType(eventTypeMap);
     } catch (err: any) {
       setError(err?.error || "Failed to load applications.");
     } finally {
@@ -168,6 +199,14 @@ export default function ApplicationsScreen() {
               filtered.map((app, index) => {
                 const stage = normalizeStage(app.stage);
                 const colors = STAGE_COLORS[stage] ?? STAGE_COLORS.Applied;
+                let stageLabel = stage;
+                if (
+                  stage === "In Process" &&
+                  latestEventType[app.slug]
+                ) {
+                  const subType = latestEventType[app.slug];
+                  stageLabel = `In Process - ${subType.charAt(0).toUpperCase() + subType.slice(1)}`;
+                }
 
                 return (
                   <Pressable
@@ -203,7 +242,7 @@ export default function ApplicationsScreen() {
                       <ThemedText
                         style={[styles.stageText, { color: colors.text }]}
                       >
-                        {stage}
+                        {stageLabel}
                       </ThemedText>
                     </View>
                   </Pressable>
@@ -226,12 +265,11 @@ function normalizeStage(stage: string) {
       return "Prospect";
     case "applied":
       return "Applied";
-    case "assessment":
-    case "technical exam":
-    case "exam":
-      return "Assessment";
+    case "in process":
+    case "in_process":
     case "interview":
-      return "Interview";
+    case "assessment":
+      return "In Process";
     case "offer":
       return "Offer";
     case "rejected":

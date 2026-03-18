@@ -12,9 +12,15 @@ import {
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useThemeColor } from "@/hooks/use-theme-color";
-import { getJobApplications } from "@/lib/api/job-applications";
+import {
+  getJobApplications,
+  getApplicationEvents,
+} from "@/lib/api/job-applications";
 import { useAuth } from "@/lib/context/AuthContext";
-import type { JobApplication } from "@/lib/types/job-application";
+import type {
+  ApplicationEvent,
+  JobApplication,
+} from "@/lib/types/job-application";
 
 function StatCard({
   label,
@@ -48,6 +54,14 @@ export default function DashboardScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const [applications, setApplications] = useState<JobApplication[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<
+    Array<{ event: ApplicationEvent; application: JobApplication }>
+  >([]);
+  const [interviewCount, setInterviewCount] = useState(0);
+  const [assessmentCount, setAssessmentCount] = useState(0);
+  const [latestEventType, setLatestEventType] = useState<
+    Record<string, string>
+  >({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -70,6 +84,58 @@ export default function DashboardScreen() {
           : Promise.resolve(),
       ]);
       setApplications(data.job_applications);
+
+      const eventResults = await Promise.all(
+        data.job_applications.map(async (app) => {
+          try {
+            const res = await getApplicationEvents(app.slug);
+            return res.events.map((event) => ({ event, application: app }));
+          } catch {
+            return [];
+          }
+        }),
+      );
+
+      const allEvents = eventResults.flat();
+
+      setInterviewCount(
+        allEvents.filter((e) => e.event.event_type === "interview").length,
+      );
+      setAssessmentCount(
+        allEvents.filter((e) => e.event.event_type === "assessment").length,
+      );
+
+      const eventTypeMap: Record<string, string> = {};
+      for (const { event, application } of allEvents) {
+        if (
+          event.event_type === "interview" ||
+          event.event_type === "assessment"
+        ) {
+          const existing = eventTypeMap[application.slug];
+          if (!existing || event.event_type === "interview") {
+            eventTypeMap[application.slug] = event.event_type;
+          }
+        }
+      }
+      setLatestEventType(eventTypeMap);
+
+      const now = new Date();
+      const upcoming = allEvents
+        .filter(
+          (item) =>
+            item.event.starts_at &&
+            new Date(item.event.starts_at) > now &&
+            (item.event.event_type === "interview" ||
+              item.event.event_type === "assessment"),
+        )
+        .sort(
+          (a, b) =>
+            new Date(a.event.starts_at!).getTime() -
+            new Date(b.event.starts_at!).getTime(),
+        )
+        .slice(0, 5);
+
+      setUpcomingEvents(upcoming);
     } catch (err: any) {
       setError(err?.error || "Failed to load dashboard.");
     } finally {
@@ -85,10 +151,6 @@ export default function DashboardScreen() {
   );
 
   const stats = useMemo(() => {
-    const total = applications.length;
-    const interviews = applications.filter((app) =>
-      app.stage.toLowerCase().includes("interview"),
-    ).length;
     const offers = applications.filter(
       (app) => app.stage.toLowerCase() === "offer",
     ).length;
@@ -97,12 +159,12 @@ export default function DashboardScreen() {
     ).length;
 
     return [
-      { label: "Total Apps", value: String(total), color: "#3B82F6" },
-      { label: "Interviews", value: String(interviews), color: "#8B5CF6" },
+      { label: "Assessments", value: String(assessmentCount), color: "#3B82F6" },
+      { label: "Interviews", value: String(interviewCount), color: "#8B5CF6" },
       { label: "Offers", value: String(offers), color: "#10B981" },
       { label: "Rejected", value: String(rejected), color: "#EF4444" },
     ];
-  }, [applications]);
+  }, [applications, interviewCount, assessmentCount]);
 
   const activeApplications = useMemo(() => {
     return applications
@@ -114,21 +176,17 @@ export default function DashboardScreen() {
       .slice(0, 5);
   }, [applications]);
 
-  const upcoming = useMemo(() => {
-    return applications
-      .filter((app) => app.stage.toLowerCase().includes("interview"))
-      .slice(0, 5)
-      .map((app) => ({
-        label: `${app.company} interview`,
-        time: formatDate(app.updated_at),
-      }));
-  }, [applications]);
-
   const needsAttention = useMemo(() => {
     return applications
+      .filter((app) => {
+        const stage = app.stage.toLowerCase();
+        return stage !== "rejected" && stage !== "archived" && stage !== "offer";
+      })
       .map((app) => ({
         company: app.company,
+        slug: app.slug,
         days: daysSince(app.updated_at),
+        stage: app.stage,
       }))
       .filter((item) => item.days >= 7)
       .sort((a, b) => b.days - a.days)
@@ -181,77 +239,77 @@ export default function DashboardScreen() {
             {activeApplications.length === 0 ? (
               <EmptyState text="No active applications yet." />
             ) : (
-              activeApplications.map((app, i) => (
-                <Pressable
-                  key={app.id}
-                  onPress={() => router.push(`/applications/${app.slug}`)}
-                  style={[
-                    styles.listRow,
-                    i < activeApplications.length - 1 && {
-                      borderBottomWidth: StyleSheet.hairlineWidth,
-                      borderBottomColor: borderColor,
-                    },
-                  ]}
-                >
-                  <ThemedText style={styles.listCompany}>
-                    {app.company}
-                  </ThemedText>
-                  <ThemedText style={styles.listRole}>
-                    {app.job_title}
-                  </ThemedText>
-                  <View
+              activeApplications.map((app, i) => {
+                const stageColors = getStageColors(app.stage);
+                let stageLabel = app.stage;
+                if (app.stage === "In Process" && latestEventType[app.slug]) {
+                  const subType = latestEventType[app.slug];
+                  stageLabel = `In Process - ${subType.charAt(0).toUpperCase() + subType.slice(1)}`;
+                }
+
+                return (
+                  <Pressable
+                    key={app.id}
+                    onPress={() => router.push(`/applications/${app.slug}`)}
                     style={[
-                      styles.stageBadge,
-                      {
-                        backgroundColor: app.stage
-                          .toLowerCase()
-                          .includes("interview")
-                          ? "#DBEAFE"
-                          : "#F3F4F6",
+                      styles.listRow,
+                      i < activeApplications.length - 1 && {
+                        borderBottomWidth: StyleSheet.hairlineWidth,
+                        borderBottomColor: borderColor,
                       },
                     ]}
                   >
-                    <ThemedText
+                    <ThemedText style={styles.listCompany}>
+                      {app.company}
+                    </ThemedText>
+                    <ThemedText style={styles.listRole}>
+                      {app.job_title}
+                    </ThemedText>
+                    <View
                       style={[
-                        styles.stageText,
-                        {
-                          color: app.stage.toLowerCase().includes("interview")
-                            ? "#1D4ED8"
-                            : "#6B7280",
-                        },
+                        styles.stageBadge,
+                        { backgroundColor: stageColors.bg },
                       ]}
                     >
-                      {app.stage}
-                    </ThemedText>
-                  </View>
-                </Pressable>
-              ))
+                      <ThemedText
+                        style={[styles.stageText, { color: stageColors.text }]}
+                      >
+                        {stageLabel}
+                      </ThemedText>
+                    </View>
+                  </Pressable>
+                );
+              })
             )}
           </ThemedView>
 
           <SectionHeader icon="⏰" title="Upcoming" />
           <ThemedView style={[styles.card, { borderColor }]}>
-            {upcoming.length === 0 ? (
-              <EmptyState text="No upcoming interviews yet." />
+            {upcomingEvents.length === 0 ? (
+              <EmptyState text="No upcoming interviews or assessments." />
             ) : (
-              upcoming.map((event, i) => (
-                <View
-                  key={`${event.label}-${i}`}
+              upcomingEvents.map((item, i) => (
+                <Pressable
+                  key={item.event.id}
+                  onPress={() =>
+                    router.push(`/applications/${item.application.slug}`)
+                  }
                   style={[
                     styles.eventRow,
-                    i < upcoming.length - 1 && {
+                    i < upcomingEvents.length - 1 && {
                       borderBottomWidth: StyleSheet.hairlineWidth,
                       borderBottomColor: borderColor,
                     },
                   ]}
                 >
                   <ThemedText style={styles.eventLabel}>
-                    {event.label}
+                    📅 {item.application.company} –{" "}
+                    {item.event.title || item.event.event_type}
                   </ThemedText>
                   <ThemedText style={styles.eventTime}>
-                    🕒 {event.time}
+                    🕒 {formatRelativeDate(item.event.starts_at!)}
                   </ThemedText>
-                </View>
+                </Pressable>
               ))
             )}
           </ThemedView>
@@ -262,8 +320,9 @@ export default function DashboardScreen() {
               <EmptyState text="Nothing needs attention right now." />
             ) : (
               needsAttention.map((item, i) => (
-                <View
+                <Pressable
                   key={`${item.company}-${i}`}
+                  onPress={() => router.push(`/applications/${item.slug}`)}
                   style={[
                     styles.eventRow,
                     i < needsAttention.length - 1 && {
@@ -275,10 +334,10 @@ export default function DashboardScreen() {
                   <ThemedText style={styles.eventLabel}>
                     No update: {item.company}
                   </ThemedText>
-                  <ThemedText style={styles.attentionDays}>
-                    {item.days} days
+                  <ThemedText style={styles.attentionMeta}>
+                    {item.stage} · {item.days} days ago
                   </ThemedText>
-                </View>
+                </Pressable>
               ))
             )}
           </ThemedView>
@@ -296,9 +355,32 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
-function formatDate(dateString: string) {
-  const date = new Date(dateString);
+const STAGE_COLORS: Record<string, { bg: string; text: string }> = {
+  Prospect: { bg: "#FEF3C7", text: "#D97706" },
+  Applied: { bg: "#F3F4F6", text: "#6B7280" },
+  "In Process": { bg: "#DBEAFE", text: "#1D4ED8" },
+  Offer: { bg: "#D1FAE5", text: "#059669" },
+  Rejected: { bg: "#FEE2E2", text: "#DC2626" },
+  Archived: { bg: "#E5E7EB", text: "#4B5563" },
+};
 
+function getStageColors(stage: string) {
+  return STAGE_COLORS[stage] ?? { bg: "#F3F4F6", text: "#6B7280" };
+}
+
+function formatRelativeDate(dateString: string) {
+  const now = new Date();
+  const date = new Date(dateString);
+  const diffMs = date.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  const time = date.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  if (diffDays <= 0) return `Today at ${time}`;
+  if (diffDays === 1) return `Tomorrow at ${time}`;
+  if (diffDays <= 7) return `In ${diffDays} days`;
   return date.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
@@ -422,7 +504,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     opacity: 0.5,
   },
-  attentionDays: {
+  attentionMeta: {
     fontSize: 13,
     color: "#DC2626",
     fontWeight: "600",
