@@ -1,4 +1,4 @@
-import { Tabs } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import React from "react";
 
 import { HapticTab } from "@/components/haptic-tab";
@@ -8,6 +8,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const router = useRouter();
 
   return (
     <Tabs
@@ -37,6 +38,12 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="add"
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+            router.push("/add-modal");
+          },
+        }}
         options={{
           title: "Add",
           tabBarIcon: ({ color }) => (
