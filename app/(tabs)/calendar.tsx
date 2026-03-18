@@ -1,4 +1,11 @@
-import { ScrollView, StyleSheet, View } from "react-native";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -44,14 +51,34 @@ function buildCalendarGrid(): (number | null)[] {
 }
 
 export default function CalendarScreen() {
+  const [refreshing, setRefreshing] = useState(false);
   const borderColor = useThemeColor(
     { light: "#E5E7EB", dark: "#2A2A2A" },
     "background",
   );
   const grid = buildCalendarGrid();
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    // TODO: fetch calendar events from API
+    await new Promise((r) => setTimeout(r, 800));
+    setRefreshing(false);
+  };
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+      }
+    >
+      {refreshing && (
+        <View style={styles.refreshBar}>
+          <ActivityIndicator size="small" />
+          <ThemedText style={styles.refreshBarText}>Updating...</ThemedText>
+        </View>
+      )}
+
       <ThemedText type="title" style={styles.monthTitle}>
         {MONTH}
       </ThemedText>
@@ -142,6 +169,21 @@ const styles = StyleSheet.create({
   },
   monthTitle: {
     marginBottom: 16,
+  },
+  refreshBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 8,
+    marginBottom: 12,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 10,
+  },
+  refreshBarText: {
+    fontSize: 13,
+    color: "#6B7280",
+    fontWeight: "500",
   },
   calendarCard: {
     borderRadius: 14,

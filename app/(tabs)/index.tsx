@@ -1,8 +1,9 @@
-import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   View,
@@ -48,6 +49,7 @@ export default function DashboardScreen() {
   const router = useRouter();
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
   const borderColor = useThemeColor(
@@ -55,23 +57,32 @@ export default function DashboardScreen() {
     "background",
   );
 
-  const fetchApplications = async () => {
+  const fetchApplications = async (mode: "initial" | "refresh" = "initial") => {
     try {
-      setLoading(true);
+      if (mode === "initial") setLoading(true);
+      if (mode === "refresh") setRefreshing(true);
       setError("");
 
-      const data = await getJobApplications();
+      const [data] = await Promise.all([
+        getJobApplications(),
+        mode === "refresh"
+          ? new Promise((r) => setTimeout(r, 600))
+          : Promise.resolve(),
+      ]);
       setApplications(data.job_applications);
     } catch (err: any) {
       setError(err?.error || "Failed to load dashboard.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    fetchApplications();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchApplications("initial");
+    }, []),
+  );
 
   const stats = useMemo(() => {
     const total = applications.length;
@@ -125,12 +136,27 @@ export default function DashboardScreen() {
   }, [applications]);
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => fetchApplications("refresh")}
+        />
+      }
+    >
+      {refreshing && (
+        <View style={styles.refreshBar}>
+          <ActivityIndicator size="small" />
+          <ThemedText style={styles.refreshBarText}>Updating...</ThemedText>
+        </View>
+      )}
+
       <ThemedText type="title" style={styles.greeting}>
         👋 Welcome, {user?.email?.split("@")[0] ?? "there"}
       </ThemedText>
 
-      {loading ? (
+      {loading && !refreshing ? (
         <View style={styles.centerState}>
           <ActivityIndicator />
           <ThemedText style={styles.stateText}>Loading dashboard...</ThemedText>
@@ -138,7 +164,7 @@ export default function DashboardScreen() {
       ) : error ? (
         <View style={styles.centerState}>
           <ThemedText style={styles.errorText}>{error}</ThemedText>
-          <Pressable style={styles.retryButton} onPress={fetchApplications}>
+          <Pressable style={styles.retryButton} onPress={() => fetchApplications()}>
             <ThemedText style={styles.retryButtonText}>Retry</ThemedText>
           </Pressable>
         </View>
@@ -294,6 +320,21 @@ const styles = StyleSheet.create({
   },
   greeting: {
     marginBottom: 20,
+  },
+  refreshBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 8,
+    marginBottom: 12,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 10,
+  },
+  refreshBarText: {
+    fontSize: 13,
+    color: "#6B7280",
+    fontWeight: "500",
   },
   statsGrid: {
     flexDirection: "row",

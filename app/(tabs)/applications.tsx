@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   View,
@@ -57,7 +58,12 @@ export default function ApplicationsScreen() {
       if (mode === "refresh") setRefreshing(true);
 
       setError("");
-      const data = await getJobApplications();
+      const [data] = await Promise.all([
+        getJobApplications(),
+        mode === "refresh"
+          ? new Promise((r) => setTimeout(r, 600))
+          : Promise.resolve(),
+      ]);
       setApplications(data.job_applications);
     } catch (err: any) {
       setError(err?.error || "Failed to load applications.");
@@ -81,22 +87,25 @@ export default function ApplicationsScreen() {
   }, [applications, activeFilter]);
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.headerRow}>
-        <ThemedText type="title" style={styles.title}>
-          Applications
-        </ThemedText>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => fetchApplications("refresh")}
+        />
+      }
+    >
+      {refreshing && (
+        <View style={styles.refreshBar}>
+          <ActivityIndicator size="small" />
+          <ThemedText style={styles.refreshBarText}>Updating...</ThemedText>
+        </View>
+      )}
 
-        <Pressable
-          style={styles.refreshButton}
-          onPress={() => fetchApplications("refresh")}
-          disabled={refreshing}
-        >
-          <ThemedText style={styles.refreshButtonText}>
-            {refreshing ? "Refreshing..." : "Refresh"}
-          </ThemedText>
-        </Pressable>
-      </View>
+      <ThemedText type="title" style={styles.title}>
+        Applications
+      </ThemedText>
 
       <ScrollView
         horizontal
@@ -248,23 +257,23 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
-  headerRow: {
+  title: {
     marginBottom: 16,
+  },
+  refreshBar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-  },
-  title: {},
-  refreshButton: {
-    backgroundColor: "#111827",
-    paddingHorizontal: 12,
+    justifyContent: "center",
+    gap: 8,
     paddingVertical: 8,
+    marginBottom: 12,
+    backgroundColor: "#F3F4F6",
     borderRadius: 10,
   },
-  refreshButtonText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "600",
+  refreshBarText: {
+    fontSize: 13,
+    color: "#6B7280",
+    fontWeight: "500",
   },
   filters: {
     flexDirection: "row",

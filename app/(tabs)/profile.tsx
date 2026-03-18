@@ -1,4 +1,13 @@
-import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 
 import { logout } from "@/lib/api/client";
 import { useAuth } from "@/lib/context/AuthContext";
@@ -44,6 +53,14 @@ function MenuSection({
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    // TODO: refresh profile data from API
+    await new Promise((r) => setTimeout(r, 800));
+    setRefreshing(false);
+  };
 
   const handleLogout = async () => {
     try {
@@ -57,7 +74,19 @@ export default function ProfileScreen() {
     Alert.alert("Coming soon", "This feature is not available yet.");
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+      }
+    >
+      {refreshing && (
+        <View style={styles.refreshBar}>
+          <ActivityIndicator size="small" />
+          <ThemedText style={styles.refreshBarText}>Updating...</ThemedText>
+        </View>
+      )}
+
       <ThemedView style={styles.profileCard}>
         <View style={styles.avatar}>
           <ThemedText style={styles.avatarEmoji}>👤</ThemedText>
@@ -90,6 +119,21 @@ const styles = StyleSheet.create({
   container: {
     padding: 20,
     paddingBottom: 40,
+  },
+  refreshBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 8,
+    marginBottom: 12,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 10,
+  },
+  refreshBarText: {
+    fontSize: 13,
+    color: "#6B7280",
+    fontWeight: "500",
   },
   profileCard: {
     flexDirection: "row",
