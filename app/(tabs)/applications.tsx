@@ -1,42 +1,62 @@
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useThemeColor } from "@/hooks/use-theme-color";
+import { getJobApplications } from "@/lib/api/job-applications";
+import type { JobApplication } from "@/lib/types/job-application";
 
 const FILTERS = ["All", "Applied", "Interview", "Offer", "Rejected"] as const;
 type Filter = (typeof FILTERS)[number];
-
-const MOCK_APPLICATIONS = [
-  { company: "Google", role: "Software Engineer", stage: "Interview", date: "Mar 10", source: "LinkedIn" },
-  { company: "Meta", role: "Frontend Engineer", stage: "Applied", date: "Mar 8", source: "Referral" },
-  { company: "Amazon", role: "SDE II", stage: "Interview", date: "Mar 5", source: "LinkedIn" },
-  { company: "Stripe", role: "Backend Engineer", stage: "Applied", date: "Mar 3", source: "Website" },
-  { company: "Netflix", role: "Senior SWE", stage: "Applied", date: "Feb 28", source: "LinkedIn" },
-  { company: "Apple", role: "iOS Engineer", stage: "Offer", date: "Feb 20", source: "Recruiter" },
-  { company: "Airbnb", role: "Full Stack", stage: "Rejected", date: "Feb 15", source: "LinkedIn" },
-  { company: "Uber", role: "Platform Eng", stage: "Rejected", date: "Feb 10", source: "Website" },
-];
 
 const STAGE_COLORS: Record<string, { bg: string; text: string }> = {
   Applied: { bg: "#F3F4F6", text: "#6B7280" },
   Interview: { bg: "#DBEAFE", text: "#1D4ED8" },
   Offer: { bg: "#D1FAE5", text: "#059669" },
   Rejected: { bg: "#FEE2E2", text: "#DC2626" },
+  Prospect: { bg: "#FEF3C7", text: "#D97706" },
 };
 
 export default function ApplicationsScreen() {
   const [activeFilter, setActiveFilter] = useState<Filter>("All");
+  const [applications, setApplications] = useState<JobApplication[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
   const borderColor = useThemeColor(
     { light: "#E5E7EB", dark: "#2A2A2A" },
     "background",
   );
 
-  const filtered =
-    activeFilter === "All"
-      ? MOCK_APPLICATIONS
-      : MOCK_APPLICATIONS.filter((a) => a.stage === activeFilter);
+  const fetchApplications = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const data = await getJobApplications();
+      setApplications(data.job_applications);
+    } catch (err: any) {
+      setError(err?.error || "Failed to load applications.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchApplications();
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (activeFilter === "All") return applications;
+    return applications.filter((app) => app.stage === activeFilter);
+  }, [applications, activeFilter]);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -58,10 +78,7 @@ export default function ApplicationsScreen() {
               onPress={() => setActiveFilter(f)}
             >
               <ThemedText
-                style={[
-                  styles.filterText,
-                  active && styles.filterTextActive,
-                ]}
+                style={[styles.filterText, active && styles.filterTextActive]}
               >
                 {f}
               </ThemedText>
@@ -70,44 +87,93 @@ export default function ApplicationsScreen() {
         })}
       </ScrollView>
 
-      <ThemedText style={styles.count}>
-        {filtered.length} application{filtered.length !== 1 ? "s" : ""}
-      </ThemedText>
+      {loading ? (
+        <View style={styles.centerState}>
+          <ActivityIndicator />
+          <ThemedText style={styles.stateText}>
+            Loading applications...
+          </ThemedText>
+        </View>
+      ) : error ? (
+        <View style={styles.centerState}>
+          <ThemedText style={styles.errorText}>{error}</ThemedText>
+          <Pressable style={styles.retryButton} onPress={fetchApplications}>
+            <ThemedText style={styles.retryButtonText}>Retry</ThemedText>
+          </Pressable>
+        </View>
+      ) : (
+        <>
+          <ThemedText style={styles.count}>
+            {filtered.length} application{filtered.length !== 1 ? "s" : ""}
+          </ThemedText>
 
-      <ThemedView style={[styles.listCard, { borderColor }]}>
-        {filtered.map((app, i) => {
-          const colors = STAGE_COLORS[app.stage] ?? STAGE_COLORS.Applied;
-          return (
-            <View
-              key={`${app.company}-${app.role}`}
-              style={[
-                styles.row,
-                i < filtered.length - 1 && {
-                  borderBottomWidth: StyleSheet.hairlineWidth,
-                  borderBottomColor: borderColor,
-                },
-              ]}
-            >
-              <View style={styles.rowLeft}>
-                <ThemedText style={styles.company}>{app.company}</ThemedText>
-                <ThemedText style={styles.role}>{app.role}</ThemedText>
-                <ThemedText style={styles.meta}>
-                  {app.source} · {app.date}
+          <ThemedView style={[styles.listCard, { borderColor }]}>
+            {filtered.length === 0 ? (
+              <View style={styles.emptyState}>
+                <ThemedText style={styles.emptyTitle}>
+                  No applications found
+                </ThemedText>
+                <ThemedText style={styles.emptyText}>
+                  Add your first application to see it here.
                 </ThemedText>
               </View>
-              <View
-                style={[styles.stageBadge, { backgroundColor: colors.bg }]}
-              >
-                <ThemedText style={[styles.stageText, { color: colors.text }]}>
-                  {app.stage}
-                </ThemedText>
-              </View>
-            </View>
-          );
-        })}
-      </ThemedView>
+            ) : (
+              filtered.map((app, i) => {
+                const colors = STAGE_COLORS[app.stage] ?? STAGE_COLORS.Applied;
+
+                return (
+                  <View
+                    key={app.id}
+                    style={[
+                      styles.row,
+                      i < filtered.length - 1 && {
+                        borderBottomWidth: StyleSheet.hairlineWidth,
+                        borderBottomColor: borderColor,
+                      },
+                    ]}
+                  >
+                    <View style={styles.rowLeft}>
+                      <ThemedText style={styles.company}>
+                        {app.company}
+                      </ThemedText>
+                      <ThemedText style={styles.role}>
+                        {app.job_title}
+                      </ThemedText>
+                      <ThemedText style={styles.meta}>
+                        {app.source} · {formatDate(app.created_at)}
+                      </ThemedText>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.stageBadge,
+                        { backgroundColor: colors.bg },
+                      ]}
+                    >
+                      <ThemedText
+                        style={[styles.stageText, { color: colors.text }]}
+                      >
+                        {app.stage}
+                      </ThemedText>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </ThemedView>
+        </>
+      )}
     </ScrollView>
   );
+}
+
+function formatDate(dateString: string) {
+  const date = new Date(dateString);
+
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 const styles = StyleSheet.create({
@@ -181,5 +247,40 @@ const styles = StyleSheet.create({
   stageText: {
     fontSize: 12,
     fontWeight: "600",
+  },
+  centerState: {
+    paddingVertical: 40,
+    alignItems: "center",
+    gap: 12,
+  },
+  stateText: {
+    opacity: 0.6,
+  },
+  errorText: {
+    color: "#DC2626",
+    fontWeight: "600",
+  },
+  retryButton: {
+    backgroundColor: "#111827",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
+  emptyState: {
+    padding: 24,
+    alignItems: "center",
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
+  emptyText: {
+    opacity: 0.6,
+    textAlign: "center",
   },
 });
