@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -44,6 +45,7 @@ function SectionHeader({ icon, title }: { icon: string; title: string }) {
 
 export default function DashboardScreen() {
   const { user } = useAuth();
+  const router = useRouter();
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -154,8 +156,9 @@ export default function DashboardScreen() {
               <EmptyState text="No active applications yet." />
             ) : (
               activeApplications.map((app, i) => (
-                <View
+                <Pressable
                   key={app.id}
+                  onPress={() => router.push(`/applications/${app.slug}`)}
                   style={[
                     styles.listRow,
                     i < activeApplications.length - 1 && {
@@ -195,7 +198,7 @@ export default function DashboardScreen() {
                       {app.stage}
                     </ThemedText>
                   </View>
-                </View>
+                </Pressable>
               ))
             )}
           </ThemedView>
