@@ -1,122 +1,266 @@
-import { Image } from "expo-image";
-import { Button, Platform, StyleSheet } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 
-import { logout } from "@/lib/api/client";
 import { useAuth } from "@/lib/context/AuthContext";
-import { HelloWave } from "@/components/hello-wave";
-import ParallaxScrollView from "@/components/parallax-scroll-view";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Link } from "expo-router";
+import { useThemeColor } from "@/hooks/use-theme-color";
+
+const MOCK_STATS = [
+  { label: "Total Apps", value: "24", color: "#3B82F6" },
+  { label: "Interviews", value: "5", color: "#8B5CF6" },
+  { label: "Offers", value: "1", color: "#10B981" },
+  { label: "Rejected", value: "10", color: "#EF4444" },
+];
+
+const MOCK_ACTIVE = [
+  { company: "Google", role: "SWE", stage: "Interview" },
+  { company: "Meta", role: "FE", stage: "Applied" },
+  { company: "Stripe", role: "Backend", stage: "Phone Screen" },
+];
+
+const MOCK_UPCOMING = [
+  { label: "Interview @ Amazon", time: "Tomorrow" },
+  { label: "Follow-up @ Stripe", time: "In 2 days" },
+];
+
+const MOCK_ATTENTION = [
+  { company: "Netflix", days: 10 },
+  { company: "Airbnb", days: 7 },
+];
+
+function StatCard({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string;
+  color: string;
+}) {
+  return (
+    <View style={[styles.statCard, { borderLeftColor: color }]}>
+      <ThemedText style={styles.statValue}>{value}</ThemedText>
+      <ThemedText style={styles.statLabel}>{label}</ThemedText>
+    </View>
+  );
+}
+
+function SectionHeader({ icon, title }: { icon: string; title: string }) {
+  return (
+    <View style={styles.sectionHeader}>
+      <ThemedText style={styles.sectionIcon}>{icon}</ThemedText>
+      <ThemedText type="subtitle" style={styles.sectionTitle}>
+        {title}
+      </ThemedText>
+    </View>
+  );
+}
 
 export default function DashboardScreen() {
-  const { signOut } = useAuth();
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } finally {
-      await signOut();
-    }
-  };
+  const { user } = useAuth();
+  const cardBg = useThemeColor(
+    { light: "#F9FAFB", dark: "#1E1E1E" },
+    "background",
+  );
+  const borderColor = useThemeColor(
+    { light: "#E5E7EB", dark: "#2A2A2A" },
+    "background",
+  );
 
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: "#A1CEDC", dark: "#1D3D47" }}
-      headerImage={
-        <Image
-          source={require("@/assets/images/partial-react-logo.png")}
-          style={styles.reactLogo}
-        />
-      }
-    >
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit{" "}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText>{" "}
-          to see changes. Press{" "}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: "cmd + d",
-              android: "cmd + m",
-              web: "F12",
-            })}
-          </ThemedText>{" "}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction
-              title="Action"
-              icon="cube"
-              onPress={() => alert("Action pressed")}
-            />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert("Share pressed")}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert("Delete pressed")}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <ScrollView contentContainerStyle={styles.container}>
+      <ThemedText type="title" style={styles.greeting}>
+        👋 Welcome, {user?.email?.split("@")[0] ?? "there"}
+      </ThemedText>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
+      <View style={styles.statsGrid}>
+        {MOCK_STATS.map((stat) => (
+          <StatCard key={stat.label} {...stat} />
+        ))}
+      </View>
+
+      <SectionHeader icon="🔥" title="Active Applications" />
+      <ThemedView style={[styles.card, { borderColor }]}>
+        {MOCK_ACTIVE.map((app, i) => (
+          <View
+            key={app.company}
+            style={[
+              styles.listRow,
+              i < MOCK_ACTIVE.length - 1 && {
+                borderBottomWidth: StyleSheet.hairlineWidth,
+                borderBottomColor: borderColor,
+              },
+            ]}
+          >
+            <ThemedText style={styles.listCompany}>{app.company}</ThemedText>
+            <ThemedText style={styles.listRole}>{app.role}</ThemedText>
+            <View
+              style={[
+                styles.stageBadge,
+                {
+                  backgroundColor:
+                    app.stage === "Interview" ? "#DBEAFE" : "#F3F4F6",
+                },
+              ]}
+            >
+              <ThemedText
+                style={[
+                  styles.stageText,
+                  {
+                    color:
+                      app.stage === "Interview" ? "#1D4ED8" : "#6B7280",
+                  },
+                ]}
+              >
+                {app.stage}
+              </ThemedText>
+            </View>
+          </View>
+        ))}
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">
-            npm run reset-project
-          </ThemedText>{" "}
-          to get a fresh <ThemedText type="defaultSemiBold">app</ThemedText>{" "}
-          directory. This will move the current{" "}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{" "}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
+
+      <SectionHeader icon="⏰" title="Upcoming" />
+      <ThemedView style={[styles.card, { borderColor }]}>
+        {MOCK_UPCOMING.map((event, i) => (
+          <View
+            key={event.label}
+            style={[
+              styles.eventRow,
+              i < MOCK_UPCOMING.length - 1 && {
+                borderBottomWidth: StyleSheet.hairlineWidth,
+                borderBottomColor: borderColor,
+              },
+            ]}
+          >
+            <ThemedText style={styles.eventLabel}>{event.label}</ThemedText>
+            <ThemedText style={styles.eventTime}>🕒 {event.time}</ThemedText>
+          </View>
+        ))}
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Button title="Log out" onPress={handleLogout} color="#ff3b30" />
+
+      <SectionHeader icon="⚠️" title="Needs Attention" />
+      <ThemedView style={[styles.card, { borderColor }]}>
+        {MOCK_ATTENTION.map((item, i) => (
+          <View
+            key={item.company}
+            style={[
+              styles.eventRow,
+              i < MOCK_ATTENTION.length - 1 && {
+                borderBottomWidth: StyleSheet.hairlineWidth,
+                borderBottomColor: borderColor,
+              },
+            ]}
+          >
+            <ThemedText style={styles.eventLabel}>
+              No update: {item.company}
+            </ThemedText>
+            <ThemedText style={styles.attentionDays}>
+              {item.days} days
+            </ThemedText>
+          </View>
+        ))}
       </ThemedView>
-    </ParallaxScrollView>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  greeting: {
+    marginBottom: 20,
+  },
+  statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: 28,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: "45%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 16,
+    borderLeftWidth: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  statValue: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  statLabel: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    marginBottom: 10,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  sectionIcon: {
+    fontSize: 18,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: "absolute",
+  sectionTitle: {
+    fontSize: 18,
+  },
+  card: {
+    borderRadius: 14,
+    overflow: "hidden",
+    marginBottom: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  listRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  listCompany: {
+    fontWeight: "700",
+    fontSize: 15,
+    width: 70,
+  },
+  listRole: {
+    flex: 1,
+    fontSize: 14,
+    opacity: 0.6,
+  },
+  stageBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  stageText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  eventRow: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 4,
+  },
+  eventLabel: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  eventTime: {
+    fontSize: 13,
+    opacity: 0.5,
+  },
+  attentionDays: {
+    fontSize: 13,
+    color: "#DC2626",
+    fontWeight: "600",
   },
 });

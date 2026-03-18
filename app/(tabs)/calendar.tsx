@@ -1,126 +1,223 @@
-import { Image } from "expo-image";
-import { Platform, StyleSheet } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 
-import { ExternalLink } from "@/components/external-link";
-import ParallaxScrollView from "@/components/parallax-scroll-view";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Collapsible } from "@/components/ui/collapsible";
-import { IconSymbol } from "@/components/ui/icon-symbol";
-import { Fonts } from "@/constants/theme";
+import { useThemeColor } from "@/hooks/use-theme-color";
+
+const DAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+const MONTH = "March 2026";
+
+const DAYS_IN_MONTH = 31;
+const START_DAY = 6; // March 2026 starts on Sunday (index 6 in Mo-Su layout)
+
+const TODAY = 18;
+
+const EVENT_DAYS: Record<number, string> = {
+  18: "Interview",
+  19: "Follow-up",
+  25: "Deadline",
+};
+
+const MOCK_EVENTS = [
+  {
+    title: "Amazon Interview",
+    time: "10:00 AM — Tomorrow",
+    icon: "📅",
+  },
+  {
+    title: "Follow-up Google",
+    time: "In 2 days",
+    icon: "📅",
+  },
+  {
+    title: "Stripe Deadline",
+    time: "Mar 25",
+    icon: "📅",
+  },
+];
+
+function buildCalendarGrid(): (number | null)[] {
+  const cells: (number | null)[] = Array(START_DAY).fill(null);
+  for (let d = 1; d <= DAYS_IN_MONTH; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
+}
 
 export default function CalendarScreen() {
+  const borderColor = useThemeColor(
+    { light: "#E5E7EB", dark: "#2A2A2A" },
+    "background",
+  );
+  const grid = buildCalendarGrid();
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: "#D0D0D0", dark: "#353636" }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }
-    >
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}
-        >
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>
-        This app includes example code to help you get started.
+    <ScrollView contentContainerStyle={styles.container}>
+      <ThemedText type="title" style={styles.monthTitle}>
+        {MONTH}
       </ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{" "}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText>{" "}
-          and{" "}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in{" "}
-          <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{" "}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the
-          web version, press <ThemedText type="defaultSemiBold">w</ThemedText>{" "}
-          in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the{" "}
-          <ThemedText type="defaultSemiBold">@2x</ThemedText> and{" "}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to
-          provide files for different screen densities
-        </ThemedText>
-        <Image
-          source={require("@/assets/images/react-logo.png")}
-          style={{ width: 100, height: 100, alignSelf: "center" }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{" "}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook
-          lets you inspect what the user&apos;s current color scheme is, and so
-          you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{" "}
-          <ThemedText type="defaultSemiBold">
-            components/HelloWave.tsx
-          </ThemedText>{" "}
-          component uses the powerful{" "}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{" "}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The{" "}
-              <ThemedText type="defaultSemiBold">
-                components/ParallaxScrollView.tsx
-              </ThemedText>{" "}
-              component provides a parallax effect for the header image.
+
+      <ThemedView style={[styles.calendarCard, { borderColor }]}>
+        <View style={styles.weekRow}>
+          {DAYS.map((d) => (
+            <ThemedText key={d} style={styles.dayHeader}>
+              {d}
             </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+          ))}
+        </View>
+
+        {Array.from({ length: grid.length / 7 }, (_, week) => (
+          <View key={week} style={styles.weekRow}>
+            {grid.slice(week * 7, week * 7 + 7).map((day, i) => {
+              const isToday = day === TODAY;
+              const event = day ? EVENT_DAYS[day] : undefined;
+              return (
+                <View key={`${week}-${i}`} style={styles.dayCell}>
+                  {day ? (
+                    <>
+                      <View
+                        style={[
+                          styles.dayNumber,
+                          isToday && styles.todayCircle,
+                        ]}
+                      >
+                        <ThemedText
+                          style={[
+                            styles.dayText,
+                            isToday && styles.todayText,
+                          ]}
+                        >
+                          {day}
+                        </ThemedText>
+                      </View>
+                      {event && (
+                        <View style={styles.eventDot}>
+                          <ThemedText style={styles.eventDotText}>
+                            ●
+                          </ThemedText>
+                        </View>
+                      )}
+                    </>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        ))}
+      </ThemedView>
+
+      <View style={styles.sectionHeader}>
+        <ThemedText type="subtitle">Upcoming Events</ThemedText>
+      </View>
+
+      <ThemedView style={[styles.eventsCard, { borderColor }]}>
+        {MOCK_EVENTS.map((event, i) => (
+          <View
+            key={event.title}
+            style={[
+              styles.eventRow,
+              i < MOCK_EVENTS.length - 1 && {
+                borderBottomWidth: StyleSheet.hairlineWidth,
+                borderBottomColor: borderColor,
+              },
+            ]}
+          >
+            <ThemedText style={styles.eventIcon}>{event.icon}</ThemedText>
+            <View style={styles.eventInfo}>
+              <ThemedText style={styles.eventTitle}>{event.title}</ThemedText>
+              <ThemedText style={styles.eventTime}>
+                🕒 {event.time}
+              </ThemedText>
+            </View>
+          </View>
+        ))}
+      </ThemedView>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: "#808080",
-    bottom: -90,
-    left: -35,
-    position: "absolute",
+  container: {
+    padding: 20,
+    paddingBottom: 40,
   },
-  titleContainer: {
+  monthTitle: {
+    marginBottom: 16,
+  },
+  calendarCard: {
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 28,
+  },
+  weekRow: {
     flexDirection: "row",
-    gap: 8,
+  },
+  dayHeader: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 13,
+    fontWeight: "600",
+    opacity: 0.5,
+    paddingVertical: 8,
+  },
+  dayCell: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 6,
+    minHeight: 44,
+  },
+  dayNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dayText: {
+    fontSize: 14,
+  },
+  todayCircle: {
+    backgroundColor: "#111827",
+  },
+  todayText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  eventDot: {
+    marginTop: 2,
+  },
+  eventDotText: {
+    fontSize: 6,
+    color: "#3B82F6",
+  },
+  sectionHeader: {
+    marginBottom: 10,
+  },
+  eventsCard: {
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  eventRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  eventIcon: {
+    fontSize: 22,
+  },
+  eventInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  eventTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  eventTime: {
+    fontSize: 13,
+    opacity: 0.5,
   },
 });

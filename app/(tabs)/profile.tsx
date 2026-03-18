@@ -1,126 +1,169 @@
-import { Image } from "expo-image";
-import { Platform, StyleSheet } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
-import { ExternalLink } from "@/components/external-link";
-import ParallaxScrollView from "@/components/parallax-scroll-view";
+import { logout } from "@/lib/api/client";
+import { useAuth } from "@/lib/context/AuthContext";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Collapsible } from "@/components/ui/collapsible";
-import { IconSymbol } from "@/components/ui/icon-symbol";
-import { Fonts } from "@/constants/theme";
+import { useThemeColor } from "@/hooks/use-theme-color";
+
+type MenuItemProps = {
+  icon: string;
+  label: string;
+  onPress?: () => void;
+};
+
+function MenuItem({ icon, label, onPress }: MenuItemProps) {
+  const borderColor = useThemeColor({}, "icon");
+
+  return (
+    <Pressable
+      style={[styles.menuItem, { borderBottomColor: borderColor + "22" }]}
+      onPress={onPress}
+    >
+      <ThemedText style={styles.menuIcon}>{icon}</ThemedText>
+      <ThemedText style={styles.menuLabel}>{label}</ThemedText>
+      <ThemedText style={styles.menuChevron}>›</ThemedText>
+    </Pressable>
+  );
+}
+
+function MenuSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.section}>
+      <ThemedText style={styles.sectionTitle}>{title}</ThemedText>
+      <ThemedView style={styles.sectionCard}>{children}</ThemedView>
+    </View>
+  );
+}
 
 export default function ProfileScreen() {
+  const { user, signOut } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } finally {
+      await signOut();
+    }
+  };
+
+  const placeholder = () =>
+    Alert.alert("Coming soon", "This feature is not available yet.");
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: "#D0D0D0", dark: "#353636" }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }
-    >
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}
-        >
-          Explore
-        </ThemedText>
+    <ScrollView contentContainerStyle={styles.container}>
+      <ThemedView style={styles.profileCard}>
+        <View style={styles.avatar}>
+          <ThemedText style={styles.avatarEmoji}>👤</ThemedText>
+        </View>
+        <View style={styles.profileInfo}>
+          <ThemedText type="subtitle">{user?.email ?? "User"}</ThemedText>
+          <ThemedText style={styles.email}>{user?.email}</ThemedText>
+        </View>
       </ThemedView>
-      <ThemedText>
-        This app includes example code to help you get started.
-      </ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{" "}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText>{" "}
-          and{" "}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in{" "}
-          <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{" "}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the
-          web version, press <ThemedText type="defaultSemiBold">w</ThemedText>{" "}
-          in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the{" "}
-          <ThemedText type="defaultSemiBold">@2x</ThemedText> and{" "}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to
-          provide files for different screen densities
-        </ThemedText>
-        <Image
-          source={require("@/assets/images/react-logo.png")}
-          style={{ width: 100, height: 100, alignSelf: "center" }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{" "}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook
-          lets you inspect what the user&apos;s current color scheme is, and so
-          you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{" "}
-          <ThemedText type="defaultSemiBold">
-            components/HelloWave.tsx
-          </ThemedText>{" "}
-          component uses the powerful{" "}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{" "}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The{" "}
-              <ThemedText type="defaultSemiBold">
-                components/ParallaxScrollView.tsx
-              </ThemedText>{" "}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+
+      <MenuSection title="Settings">
+        <MenuItem icon="🔔" label="Notifications" onPress={placeholder} />
+        <MenuItem icon="🌍" label="Timezone" onPress={placeholder} />
+        <MenuItem icon="💼" label="Preferences" onPress={placeholder} />
+      </MenuSection>
+
+      <MenuSection title="Account">
+        <MenuItem icon="🔑" label="Change Password" onPress={placeholder} />
+        <MenuItem icon="📄" label="Terms & Privacy" onPress={placeholder} />
+      </MenuSection>
+
+      <Pressable style={styles.logoutButton} onPress={handleLogout}>
+        <ThemedText style={styles.logoutText}>Log Out</ThemedText>
+      </Pressable>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: "#808080",
-    bottom: -90,
-    left: -35,
-    position: "absolute",
+  container: {
+    padding: 20,
+    paddingBottom: 40,
   },
-  titleContainer: {
+  profileCard: {
     flexDirection: "row",
-    gap: 8,
+    alignItems: "center",
+    gap: 16,
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 28,
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarEmoji: {
+    fontSize: 28,
+  },
+  profileInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  email: {
+    fontSize: 14,
+    opacity: 0.6,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    opacity: 0.5,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  sectionCard: {
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  menuIcon: {
+    fontSize: 20,
+    width: 28,
+    textAlign: "center",
+  },
+  menuLabel: {
+    flex: 1,
+    fontSize: 16,
+  },
+  menuChevron: {
+    fontSize: 20,
+    opacity: 0.3,
+  },
+  logoutButton: {
+    marginTop: 8,
+    backgroundColor: "#FEE2E2",
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  logoutText: {
+    color: "#DC2626",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });
