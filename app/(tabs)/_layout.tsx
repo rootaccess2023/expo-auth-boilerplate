@@ -1,28 +1,28 @@
+import { IconBriefcase, IconHome } from "@tabler/icons-react-native";
 import { Tabs } from "expo-router";
-import React from "react";
+import { StyleSheet } from "react-native";
 
-import { HapticTab } from "@/components/haptic-tab";
-import { IconSymbol } from "@/components/ui/icon-symbol";
-import { Colors } from "@/constants/theme";
-import { useColorScheme } from "@/hooks/use-color-scheme";
+const ICON_SIZE = 26;
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
+        tabBarActiveTintColor: "#00ADEF",
+        tabBarInactiveTintColor: "#222222",
         headerShown: false,
-        tabBarButton: HapticTab,
+        tabBarStyle: styles.tabBar,
+        tabBarItemStyle: styles.tabBarItem,
+        tabBarIconStyle: styles.tabBarIcon,
+        tabBarLabelStyle: styles.tabBarLabel,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Dashboard",
+          title: "Home",
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="house.fill" color={color} />
+            <IconHome size={ICON_SIZE} color={color} strokeWidth={1.5} />
           ),
         }}
       />
@@ -31,37 +31,30 @@ export default function TabLayout() {
         options={{
           title: "Applications",
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="briefcase.fill" color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="add"
-        options={{
-          title: "Add",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="plus.circle.fill" color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="calendar"
-        options={{
-          title: "Calendar",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="calendar" color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Profile",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="person.fill" color={color} />
+            <IconBriefcase size={ICON_SIZE} color={color} strokeWidth={1.5} />
           ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: "#FFFFFF",
+    borderTopColor: "#E5E5E5",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 6,
+    paddingBottom: 4,
+  },
+  tabBarItem: {
+    paddingVertical: 2,
+  },
+  tabBarIcon: {
+    marginBottom: 0,
+  },
+  tabBarLabel: {
+    fontSize: 12,
+    marginTop: 5,
+  },
+});
