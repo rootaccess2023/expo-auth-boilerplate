@@ -1,6 +1,7 @@
-import { IconBriefcase, IconHome } from "@tabler/icons-react-native";
+import { IconBriefcase, IconHome, IconWand } from "@tabler/icons-react-native";
 import { Tabs } from "expo-router";
-import { StyleSheet } from "react-native";
+import { StyleSheet, Text } from "react-native";
+import { color, Hamburg } from "../../assets/fonts/sharedStyles";
 
 const ICON_SIZE = 26;
 
@@ -8,21 +9,37 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#00ADEF",
+        tabBarActiveTintColor: color.PRIMARY,
         tabBarInactiveTintColor: "#222222",
         headerShown: false,
         tabBarStyle: styles.tabBar,
         tabBarItemStyle: styles.tabBarItem,
         tabBarIconStyle: styles.tabBarIcon,
-        tabBarLabelStyle: styles.tabBarLabel,
+        tabBarLabel: ({ focused, color: tintColor, children }) => (
+          <Text
+            style={[
+              styles.tabBarLabel,
+              {
+                color: tintColor,
+                fontFamily: focused ? Hamburg.MEDIUM : Hamburg.REGULAR,
+              },
+            ]}
+          >
+            {children}
+          </Text>
+        ),
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) => (
-            <IconHome size={ICON_SIZE} color={color} strokeWidth={1.5} />
+          tabBarIcon: ({ color, focused }) => (
+            <IconHome
+              size={ICON_SIZE}
+              color={color}
+              strokeWidth={focused ? 2 : 1.5}
+            />
           ),
         }}
       />
@@ -30,8 +47,25 @@ export default function TabLayout() {
         name="applications"
         options={{
           title: "Applications",
-          tabBarIcon: ({ color }) => (
-            <IconBriefcase size={ICON_SIZE} color={color} strokeWidth={1.5} />
+          tabBarIcon: ({ color, focused }) => (
+            <IconBriefcase
+              size={ICON_SIZE}
+              color={color}
+              strokeWidth={focused ? 2 : 1.5}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="tools"
+        options={{
+          title: "Tools",
+          tabBarIcon: ({ color, focused }) => (
+            <IconWand
+              size={ICON_SIZE}
+              color={color}
+              strokeWidth={focused ? 2 : 1.5}
+            />
           ),
         }}
       />
@@ -42,10 +76,14 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBar: {
     backgroundColor: "#FFFFFF",
-    borderTopColor: "#E5E5E5",
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 0,
     paddingTop: 6,
     paddingBottom: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 8,
   },
   tabBarItem: {
     paddingVertical: 2,
@@ -55,6 +93,7 @@ const styles = StyleSheet.create({
   },
   tabBarLabel: {
     fontSize: 12,
-    marginTop: 5,
+    marginTop: 3,
+    letterSpacing: 0.5,
   },
 });
