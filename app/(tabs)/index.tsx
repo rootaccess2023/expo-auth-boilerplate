@@ -1,13 +1,14 @@
 import {
   IconBell,
-  IconBuildingStore,
+  IconRocket,
   IconSearch,
-  IconTruckDelivery,
   IconUser,
 } from "@tabler/icons-react-native";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Animated,
   ActivityIndicator,
+  Easing,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -21,12 +22,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { color, Hamburg } from "../../assets/fonts/sharedStyles";
 
-type Mode = "store" | "delivery";
-
 const SCROLL_THRESHOLD = 8;
 const PULL_THRESHOLD = 20;
 const HEADER_BOTTOM_PADDING = 12;
+const HEADER_ROW_HEIGHT = 44;
 const SEARCH_BAR_HEIGHT = 48;
+const SEARCH_TOP_SPACING = 12;
 const SEARCH_BOTTOM_SPACING = 16;
 const HEADER_RADIUS = 24;
 
@@ -59,14 +60,46 @@ const SAMPLE_SECTIONS = [
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const [mode, setMode] = useState<Mode>("store");
   const [scrollOffset, setScrollOffset] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [pullOffset, setPullOffset] = useState(0);
+  const [searchVisible, setSearchVisible] = useState(true);
+  const [bounces, setBounces] = useState(true);
+  const prevScrollOffsetRef = useRef(0);
+  const scrollViewHeightRef = useRef(0);
+  const contentHeightRef = useRef(0);
+  const searchAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.timing(searchAnim, {
+      toValue: searchVisible ? 1 : 0,
+      duration: 280,
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [searchVisible]);
+
+  const searchContainerHeight = searchAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, SEARCH_TOP_SPACING + SEARCH_BAR_HEIGHT],
+    extrapolate: "clamp",
+  });
+  const searchOpacity = searchAnim.interpolate({
+    inputRange: [0, 0.35, 1],
+    outputRange: [0, 0, 1],
+    extrapolate: "clamp",
+  });
+  const headerPaddingBottom = searchAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [HEADER_BOTTOM_PADDING, SEARCH_BOTTOM_SPACING],
+    extrapolate: "clamp",
+  });
+
   const scrolled = scrollOffset > SCROLL_THRESHOLD;
 
   const headerTopPadding = insets.top + 8;
-  const headerHeight = headerTopPadding + 48 + HEADER_BOTTOM_PADDING;
+  const headerHeight =
+    headerTopPadding + HEADER_ROW_HEIGHT + HEADER_BOTTOM_PADDING;
   const iconColor = scrolled ? "#1a1a2e" : "#FFFFFF";
   const titleColor = scrolled ? "#1a1a2e" : "#FFFFFF";
   const subtitleColor = scrolled ? color.PRIMARY : "#FFFFFF";
@@ -79,19 +112,33 @@ export default function HomeScreen() {
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetY = event.nativeEvent.contentOffset.y;
+    const delta = offsetY - prevScrollOffsetRef.current;
+
+    if (offsetY <= 0) {
+      setSearchVisible(true);
+    } else if (delta > 0) {
+      setSearchVisible(false);
+    } else if (delta < 0) {
+      setSearchVisible(true);
+    }
+
+    prevScrollOffsetRef.current = offsetY;
     setScrollOffset(offsetY);
     setPullOffset(Math.max(0, -offsetY));
+
+    const nearBottom =
+      offsetY + scrollViewHeightRef.current >= contentHeightRef.current - 50;
+    setBounces(!nearBottom);
   };
 
   const showRefreshLoader = refreshing || pullOffset > PULL_THRESHOLD;
   const loaderSpace = refreshing
     ? 40
     : Math.min(Math.max(0, pullOffset - 8), 56);
-  const searchAreaHeight = SEARCH_BAR_HEIGHT + SEARCH_BOTTOM_SPACING;
-  const loaderTop = headerHeight + searchAreaHeight;
-  const topBackdropHeight = loaderTop + loaderSpace;
-  // Scrolls up with content, but never moves down below its resting position during pull
-  const searchBarTop = headerHeight - Math.max(0, scrollOffset);
+  const searchAreaHeight =
+    SEARCH_TOP_SPACING + SEARCH_BAR_HEIGHT + SEARCH_BOTTOM_SPACING;
+  const totalHeaderHeight = headerHeight + searchAreaHeight;
+  const topBackdropHeight = totalHeaderHeight + loaderSpace;
 
   return (
     <View style={styles.container}>
@@ -104,7 +151,9 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
-        alwaysBounceVertical
+        bounces={bounces}
+        onLayout={(e) => { scrollViewHeightRef.current = e.nativeEvent.layout.height; }}
+        onContentSizeChange={(_, h) => { contentHeightRef.current = h; }}
         onScroll={handleScroll}
         refreshControl={
           <RefreshControl
@@ -116,7 +165,7 @@ export default function HomeScreen() {
           />
         }
       >
-        <View style={{ height: loaderTop }} />
+        <View style={{ height: totalHeaderHeight, backgroundColor: color.PRIMARY }} />
         <View style={styles.heroShell}>
           <View style={styles.heroSection}>
             <Text style={styles.heroSectionTitle}>Sample</Text>
@@ -144,7 +193,7 @@ export default function HomeScreen() {
           style={[
             styles.refreshLoader,
             {
-              top: loaderTop,
+              top: totalHeaderHeight,
               height: loaderSpace,
             },
           ]}
@@ -155,73 +204,58 @@ export default function HomeScreen() {
         </View>
       )}
 
-      <View style={[styles.searchBarFixed, { top: searchBarTop }]}>
-        <IconSearch size={30} color="#222222" strokeWidth={1.5} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search roles, companies..."
-          placeholderTextColor="#999999"
-          returnKeyType="search"
-        />
-      </View>
-
-      <View
+      <Animated.View
         style={[
           styles.header,
           {
             paddingTop: headerTopPadding,
-            paddingBottom: HEADER_BOTTOM_PADDING,
+            paddingBottom: headerPaddingBottom,
             backgroundColor: scrolled ? "#FFFFFF" : color.PRIMARY,
-            borderBottomWidth: scrolled ? StyleSheet.hairlineWidth : 0,
+            borderBottomWidth: 0,
             ...(scrolled && styles.headerScrolled),
           },
         ]}
       >
-        <View style={styles.toggle}>
-          <Pressable
-            style={[
-              styles.toggleOption,
-              mode === "store" && styles.toggleOptionActive,
-            ]}
-            onPress={() => setMode("store")}
-          >
-            <IconBuildingStore
+        <View style={styles.headerRow}>
+          <View style={styles.brandIcon}>
+            <IconRocket
               size={22}
-              color={mode === "store" ? color.PRIMARY : "#555555"}
+              color={scrolled ? color.PRIMARY : "#FFFFFF"}
               strokeWidth={1.5}
             />
-          </Pressable>
-          <Pressable
-            style={[
-              styles.toggleOption,
-              mode === "delivery" && styles.toggleOptionActive,
-            ]}
-            onPress={() => setMode("delivery")}
-          >
-            <IconTruckDelivery
-              size={22}
-              color={mode === "delivery" ? color.PRIMARY : "#555555"}
-              strokeWidth={1.5}
+          </View>
+
+          <View style={styles.titleBlock}>
+            <Text style={[styles.title, { color: titleColor }]}>NextRole</Text>
+            <Text style={[styles.subtitle, { color: subtitleColor }]}>
+              Find your next role
+            </Text>
+          </View>
+
+          <View style={styles.actions}>
+            <Pressable style={styles.actionButton} hitSlop={8}>
+              <IconBell size={24} color={iconColor} strokeWidth={1.5} />
+            </Pressable>
+            <Pressable style={styles.actionButton} hitSlop={8}>
+              <IconUser size={24} color={iconColor} strokeWidth={1.5} />
+            </Pressable>
+          </View>
+        </View>
+
+        <Animated.View
+          style={{ height: searchContainerHeight, opacity: searchOpacity, overflow: "hidden" }}
+        >
+          <View style={styles.searchBarInHeader}>
+            <IconSearch size={30} color="#222222" strokeWidth={1.5} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search roles, companies..."
+              placeholderTextColor="#999999"
+              returnKeyType="search"
             />
-          </Pressable>
-        </View>
-
-        <View style={styles.titleBlock}>
-          <Text style={[styles.title, { color: titleColor }]}>NextRole</Text>
-          <Text style={[styles.subtitle, { color: subtitleColor }]}>
-            Find your next role
-          </Text>
-        </View>
-
-        <View style={styles.actions}>
-          <Pressable style={styles.actionButton} hitSlop={8}>
-            <IconBell size={24} color={iconColor} strokeWidth={1.5} />
-          </Pressable>
-          <Pressable style={styles.actionButton} hitSlop={8}>
-            <IconUser size={24} color={iconColor} strokeWidth={1.5} />
-          </Pressable>
-        </View>
-      </View>
+          </View>
+        </Animated.View>
+      </Animated.View>
     </View>
   );
 }
@@ -237,10 +271,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: "column",
     paddingHorizontal: 16,
     borderBottomColor: "#E5E5E5",
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: HEADER_ROW_HEIGHT,
   },
   headerScrolled: {
     shadowColor: "#000",
@@ -249,26 +287,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  toggle: {
-    flexDirection: "row",
-    backgroundColor: "#EBEBEB",
-    borderRadius: 12,
-    padding: 4,
-  },
-  toggleOption: {
+  brandIcon: {
     width: 40,
-    height: 36,
-    borderRadius: 10,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
-  },
-  toggleOptionActive: {
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 3,
-    elevation: 2,
   },
   titleBlock: {
     flex: 1,
@@ -302,22 +325,17 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: color.PRIMARY,
-    borderBottomLeftRadius: HEADER_RADIUS,
-    borderBottomRightRadius: HEADER_RADIUS,
     zIndex: 0,
   },
   scrollContent: {
     flexGrow: 1,
   },
-  searchBarFixed: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    zIndex: 9,
+  searchBarInHeader: {
+    marginTop: SEARCH_TOP_SPACING,
     height: SEARCH_BAR_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: color.SURFACE,
     borderRadius: SEARCH_BAR_HEIGHT / 2,
     paddingHorizontal: 16,
     gap: 12,
@@ -355,6 +373,7 @@ const styles = StyleSheet.create({
   },
   heroShell: {
     flexGrow: 1,
+    minHeight: "100%",
     backgroundColor: "#FFFFFF",
   },
   content: {

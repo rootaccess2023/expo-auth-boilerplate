@@ -17,6 +17,7 @@ export const Hamburg = {
 
 export const color = {
   PRIMARY: "#13B9B5",
+  SURFACE: "#f4f6f8",
 } as const;
 
 export const hamburgFonts = {

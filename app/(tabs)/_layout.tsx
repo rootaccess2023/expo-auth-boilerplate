@@ -1,4 +1,4 @@
-import { IconBriefcase, IconHome, IconWand } from "@tabler/icons-react-native";
+import { IconBriefcase, IconChecklist, IconHome, IconNotebook } from "@tabler/icons-react-native";
 import { Tabs } from "expo-router";
 import { StyleSheet, Text } from "react-native";
 import { color, Hamburg } from "../../assets/fonts/sharedStyles";
@@ -57,11 +57,24 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="follow-ups"
+        options={{
+          title: "Follow-ups",
+          tabBarIcon: ({ color, focused }) => (
+            <IconChecklist
+              size={ICON_SIZE}
+              color={color}
+              strokeWidth={focused ? 2 : 1.5}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="tools"
         options={{
-          title: "Tools",
+          title: "Prep",
           tabBarIcon: ({ color, focused }) => (
-            <IconWand
+            <IconNotebook
               size={ICON_SIZE}
               color={color}
               strokeWidth={focused ? 2 : 1.5}

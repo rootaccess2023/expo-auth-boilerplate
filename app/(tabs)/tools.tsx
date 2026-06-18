@@ -70,7 +70,7 @@ export default function ToolsScreen() {
       }
     >
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Text style={styles.title}>Tools</Text>
+        <Text style={styles.title}>Prep</Text>
         <Text style={styles.subtitle}>Supercharge your job search</Text>
       </View>
 
