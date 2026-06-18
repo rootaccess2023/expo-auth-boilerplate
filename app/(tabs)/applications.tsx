@@ -1,7 +1,9 @@
 import {
   IconChevronDown,
+  IconPlus,
   IconSearch,
 } from "@tabler/icons-react-native";
+import { router } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -16,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ApplicationStatus, useApplications } from "@/src/api/job-application";
 import { color, Hamburg } from "../../assets/fonts/sharedStyles";
 
 const SCROLL_THRESHOLD = 8;
@@ -27,20 +30,26 @@ const SEARCH_TOP_SPACING = 12;
 const SEARCH_BOTTOM_SPACING = 16;
 const HEADER_RADIUS = 24;
 
-const SAMPLE_APPLICATIONS = [
-  { company: "Stripe", role: "Senior Product Designer", status: "In review" },
-  { company: "Vercel", role: "Frontend Engineer", status: "Applied" },
-  { company: "Figma", role: "UX Research Lead", status: "Interview" },
-  { company: "Spotify", role: "Mobile Developer", status: "Applied" },
-  { company: "Airbnb", role: "Design Systems Engineer", status: "Rejected" },
-  { company: "Notion", role: "Product Manager", status: "In review" },
-];
+const STATUS_LABEL: Record<ApplicationStatus, string> = {
+  saved:        "Saved",
+  applied:      "Applied",
+  screening:    "Screening",
+  interviewing: "Interviewing",
+  offer:        "Offer",
+  rejected:     "Rejected",
+  accepted:     "Accepted",
+  withdrawn:    "Withdrawn",
+};
 
-const STATUS_COLORS: Record<string, string> = {
-  "In review": "#F59E0B",
-  Applied: "#6B7280",
-  Interview: "#10B981",
-  Rejected: "#EF4444",
+const STATUS_COLOR: Record<ApplicationStatus, string> = {
+  saved:        "#6B7280",
+  applied:      "#3B82F6",
+  screening:    "#8B5CF6",
+  interviewing: "#10B981",
+  offer:        "#F59E0B",
+  rejected:     "#EF4444",
+  accepted:     "#13B9B5",
+  withdrawn:    "#9CA3AF",
 };
 
 export default function ApplicationsScreen() {
@@ -54,19 +63,20 @@ export default function ApplicationsScreen() {
   const scrollViewHeightRef = useRef(0);
   const contentHeightRef = useRef(0);
 
-  const scrolled = scrollOffset > SCROLL_THRESHOLD;
+  const { data: applications, isLoading, isError, refetch } = useApplications();
 
+  const scrolled = scrollOffset > SCROLL_THRESHOLD;
   const headerTopPadding = insets.top + 8;
-  const headerHeight =
-    headerTopPadding + HEADER_ROW_HEIGHT + HEADER_BOTTOM_PADDING;
+  const headerHeight = headerTopPadding + HEADER_ROW_HEIGHT + HEADER_BOTTOM_PADDING;
   const iconColor = scrolled ? "#1a1a2e" : "#FFFFFF";
   const titleColor = scrolled ? "#1a1a2e" : "#FFFFFF";
   const subtitleColor = scrolled ? color.PRIMARY : "#FFFFFF";
 
-  const onRefresh = useCallback(() => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
-  }, []);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetY = event.nativeEvent.contentOffset.y;
@@ -93,10 +103,63 @@ export default function ApplicationsScreen() {
   const loaderSpace = refreshing
     ? 40
     : Math.min(Math.max(0, pullOffset - 8), 56);
-  const searchAreaHeight =
-    SEARCH_TOP_SPACING + SEARCH_BAR_HEIGHT + SEARCH_BOTTOM_SPACING;
+  const searchAreaHeight = SEARCH_TOP_SPACING + SEARCH_BAR_HEIGHT + SEARCH_BOTTOM_SPACING;
   const totalHeaderHeight = headerHeight + searchAreaHeight;
   const topBackdropHeight = totalHeaderHeight + loaderSpace;
+
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <View style={styles.centerState}>
+          <ActivityIndicator color={color.PRIMARY} size="large" />
+        </View>
+      );
+    }
+
+    if (isError) {
+      return (
+        <View style={styles.centerState}>
+          <Text style={styles.stateTitle}>Could not load applications</Text>
+          <Text style={styles.stateBody}>Pull down to try again.</Text>
+        </View>
+      );
+    }
+
+    if (!applications || applications.length === 0) {
+      return (
+        <View style={styles.centerState}>
+          <Text style={styles.stateTitle}>No applications yet</Text>
+          <Text style={styles.stateBody}>Tap + to add one.</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Your applications</Text>
+        {applications.map((app) => {
+          const badgeColor = STATUS_COLOR[app.status];
+          return (
+            <Pressable
+              key={app.id}
+              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+              onPress={() => router.push(`/application/${app.slug}`)}
+            >
+              <View style={styles.cardTop}>
+                <Text style={styles.cardCompany}>{app.company.name}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: badgeColor + "20" }]}>
+                  <Text style={[styles.statusText, { color: badgeColor }]}>
+                    {STATUS_LABEL[app.status]}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.cardRole}>{app.role_title}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -104,6 +167,7 @@ export default function ApplicationsScreen() {
         style={[styles.topBackdrop, { height: topBackdropHeight }]}
         pointerEvents="none"
       />
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -127,49 +191,16 @@ export default function ApplicationsScreen() {
         <View style={styles.heroShell}>
           <View style={styles.heroSection} />
           <View style={styles.content}>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Your applications</Text>
-              {SAMPLE_APPLICATIONS.map((app) => (
-                <View key={`${app.company}-${app.role}`} style={styles.card}>
-                  <View style={styles.cardTop}>
-                    <Text style={styles.cardTitle}>{app.role}</Text>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        { backgroundColor: STATUS_COLORS[app.status] + "20" },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.statusText,
-                          { color: STATUS_COLORS[app.status] },
-                        ]}
-                      >
-                        {app.status}
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={styles.cardSubtitle}>{app.company}</Text>
-                </View>
-              ))}
-            </View>
+            {renderContent()}
           </View>
         </View>
       </ScrollView>
 
       {loaderSpace > 0 && (
         <View
-          style={[
-            styles.refreshLoader,
-            {
-              top: totalHeaderHeight,
-              height: loaderSpace,
-            },
-          ]}
+          style={[styles.refreshLoader, { top: totalHeaderHeight, height: loaderSpace }]}
         >
-          {showRefreshLoader && (
-            <ActivityIndicator color="#FFFFFF" size="large" />
-          )}
+          {showRefreshLoader && <ActivityIndicator color="#FFFFFF" size="large" />}
         </View>
       )}
 
@@ -178,11 +209,8 @@ export default function ApplicationsScreen() {
           styles.header,
           {
             paddingTop: headerTopPadding,
-            paddingBottom: searchVisible
-              ? SEARCH_BOTTOM_SPACING
-              : HEADER_BOTTOM_PADDING,
+            paddingBottom: searchVisible ? SEARCH_BOTTOM_SPACING : HEADER_BOTTOM_PADDING,
             backgroundColor: scrolled ? "#FFFFFF" : color.PRIMARY,
-            borderBottomWidth: 0,
             ...(scrolled && styles.headerScrolled),
           },
         ]}
@@ -194,21 +222,14 @@ export default function ApplicationsScreen() {
               Track your progress
             </Text>
           </View>
-
           <Pressable
             style={[
               styles.filterPill,
-              {
-                borderColor: scrolled
-                  ? "#D1D5DB"
-                  : "rgba(255, 255, 255, 0.45)",
-              },
+              { borderColor: scrolled ? "#D1D5DB" : "rgba(255,255,255,0.45)" },
             ]}
             hitSlop={6}
           >
-            <Text style={[styles.filterPillText, { color: iconColor }]}>
-              All statuses
-            </Text>
+            <Text style={[styles.filterPillText, { color: iconColor }]}>All statuses</Text>
             <IconChevronDown size={14} color={iconColor} strokeWidth={2.5} />
           </Pressable>
         </View>
@@ -225,6 +246,13 @@ export default function ApplicationsScreen() {
           </View>
         )}
       </View>
+
+      <Pressable
+        style={[styles.fab, { bottom: insets.bottom + 24 }]}
+        onPress={() => router.push("/new-application")}
+      >
+        <IconPlus size={26} color="#FFFFFF" strokeWidth={2} />
+      </Pressable>
     </View>
   );
 }
@@ -339,8 +367,27 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: "#FFFFFF",
     paddingTop: 24,
-    paddingBottom: 24,
-    gap: 24,
+    paddingBottom: 100,
+  },
+  centerState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+    paddingTop: 60,
+    gap: 8,
+  },
+  stateTitle: {
+    fontFamily: Hamburg.BOLD,
+    fontSize: 16,
+    color: "#1a1a2e",
+    textAlign: "center",
+  },
+  stateBody: {
+    fontFamily: Hamburg.REGULAR,
+    fontSize: 14,
+    color: "#888888",
+    textAlign: "center",
   },
   section: {
     gap: 12,
@@ -355,7 +402,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#F7F7F7",
     borderRadius: 12,
     padding: 16,
-    gap: 6,
+    gap: 4,
+  },
+  cardPressed: {
+    opacity: 0.7,
   },
   cardTop: {
     flexDirection: "row",
@@ -363,13 +413,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 8,
   },
-  cardTitle: {
+  cardCompany: {
     flex: 1,
-    fontFamily: Hamburg.MEDIUM,
+    fontFamily: Hamburg.BOLD,
     fontSize: 15,
     color: "#1a1a2e",
   },
-  cardSubtitle: {
+  cardRole: {
     fontFamily: Hamburg.REGULAR,
     fontSize: 13,
     color: "#666666",
@@ -382,5 +432,21 @@ const styles = StyleSheet.create({
   statusText: {
     fontFamily: Hamburg.MEDIUM,
     fontSize: 12,
+  },
+  fab: {
+    position: "absolute",
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: color.PRIMARY,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 20,
   },
 });
