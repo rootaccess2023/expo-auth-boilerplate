@@ -2,6 +2,7 @@ import {
   IconChevronRight,
   IconFileAnalytics,
   IconLetterCase,
+  IconLogout,
   IconMessages,
   IconTarget,
 } from "@tabler/icons-react-native";
@@ -15,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useLogout } from "@/src/api/auth";
 import { color, Hamburg } from "../../assets/fonts/sharedStyles";
 
 const tools = [
@@ -47,6 +49,7 @@ const tools = [
 export default function ToolsScreen() {
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
+  const { mutate: logout, isPending: loggingOut } = useLogout();
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -94,6 +97,21 @@ export default function ToolsScreen() {
           );
         })}
       </View>
+
+        <Pressable
+          style={({ pressed }) => [styles.logoutButton, pressed && styles.cardPressed]}
+          onPress={() => logout()}
+          disabled={loggingOut}
+        >
+          <View style={[styles.iconWrap, styles.logoutIconWrap]}>
+            <IconLogout size={24} color="#EF4444" strokeWidth={1.5} />
+          </View>
+          <View style={styles.cardText}>
+            <Text style={styles.logoutLabel}>
+              {loggingOut ? "Signing out…" : "Sign out"}
+            </Text>
+          </View>
+        </Pressable>
     </ScrollView>
   );
 }
@@ -161,5 +179,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#888888",
     marginTop: 2,
+  },
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 16,
+    gap: 14,
+    marginTop: 24,
+    marginHorizontal: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  logoutIconWrap: {
+    backgroundColor: "#FEE2E2",
+  },
+  logoutLabel: {
+    fontFamily: Hamburg.MEDIUM,
+    fontSize: 15,
+    color: "#EF4444",
   },
 });
