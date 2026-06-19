@@ -11,6 +11,13 @@ export type ApplicationStatus =
   | "accepted"
   | "withdrawn";
 
+export interface StatusChange {
+  id: number;
+  from_status: ApplicationStatus | null;
+  to_status: ApplicationStatus;
+  changed_at: string;
+}
+
 export interface JobApplication {
   id: number;
   slug: string;
@@ -24,6 +31,7 @@ export interface JobApplication {
     id: number;
     name: string;
   };
+  status_changes?: StatusChange[];
 }
 
 export interface NewApplication {
@@ -45,12 +53,18 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  updateStatus: (slug: string, status: ApplicationStatus) =>
+    request<JobApplication>(`/job_applications/${slug}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
 };
 
-export function useApplication(slug: string) {
+export function useApplication(slug: string | undefined) {
   return useQuery({
     queryKey: ["job_applications", slug],
-    queryFn:  () => api.get(slug),
+    queryFn:  () => api.get(slug!),
+    enabled:  Boolean(slug),
   });
 }
 
@@ -67,6 +81,38 @@ export function useCreateApplication() {
     mutationFn: api.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    },
+  });
+}
+
+export function useUpdateStatus(slug: string) {
+  const queryClient = useQueryClient();
+  const detailKey = ["job_applications", slug] as const;
+
+  return useMutation({
+    mutationFn: (status: ApplicationStatus) => api.updateStatus(slug, status),
+
+    // Optimistic: flip the badge instantly
+    onMutate: async (status) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const previous = queryClient.getQueryData<JobApplication>(detailKey);
+      if (previous) {
+        queryClient.setQueryData<JobApplication>(detailKey, { ...previous, status });
+      }
+      return { previous };
+    },
+
+    // On success the server returns the full application including the new status_change row;
+    // write it directly to the cache (no extra refetch needed) then refresh the list badge.
+    onSuccess: (data) => {
+      queryClient.setQueryData(detailKey, data);
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    },
+
+    onError: (_err, _status, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(detailKey, context.previous);
+      }
     },
   });
 }
