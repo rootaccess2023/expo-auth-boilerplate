@@ -254,7 +254,7 @@ export default function ApplicationDetailScreen() {
 }
 
 function TimelineRow({ change, isLast }: { change: StatusChange; isLast: boolean }) {
-  const fromLabel = change.from_status ? STATUS_LABEL[change.from_status] : "—";
+  const from = change.from_status ? STATUS_LABEL[change.from_status] : null;
   const toColor = STATUS_COLOR[change.to_status];
 
   return (
@@ -265,8 +265,8 @@ function TimelineRow({ change, isLast }: { change: StatusChange; isLast: boolean
       </View>
       <View style={styles.timelineContent}>
         <Text style={styles.timelineTransition}>
-          {fromLabel}
-          <Text style={styles.timelineArrow}>{" → "}</Text>
+          {from ?? <Text style={{ fontFamily: undefined }}>-</Text>}
+          <Text style={[styles.timelineArrow, { fontFamily: undefined }]}>{" > "}</Text>
           <Text style={[styles.timelineToStatus, { color: toColor }]}>
             {STATUS_LABEL[change.to_status]}
           </Text>

@@ -35,7 +35,9 @@ export default function FollowUpsScreen() {
       }
     >
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Text style={styles.title}>Follow-ups</Text>
+        <Text style={styles.title}>
+          Follow<Text style={{ fontFamily: undefined }}>-</Text>ups
+        </Text>
         <Text style={styles.subtitle}>Stay on top of your applications</Text>
       </View>
 
