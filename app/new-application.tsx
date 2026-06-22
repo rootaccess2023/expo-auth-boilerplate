@@ -151,7 +151,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#FAFAFA",
   },
   header: {
-    backgroundColor: color.PRIMARY,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,

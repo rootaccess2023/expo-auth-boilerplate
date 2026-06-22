@@ -1,12 +1,16 @@
+import { ApplicationStatus, useApplications } from "@/src/api/job-application";
 import {
-  IconChevronDown,
+  IconAdjustmentsHorizontal,
+  IconArrowsSort,
   IconPlus,
   IconSearch,
 } from "@tabler/icons-react-native";
 import { router } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -18,38 +22,61 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ApplicationStatus, useApplications } from "@/src/api/job-application";
 import { color, Hamburg } from "../../assets/fonts/sharedStyles";
 
 const SCROLL_THRESHOLD = 8;
 const PULL_THRESHOLD = 20;
-const HEADER_BOTTOM_PADDING = 12;
 const HEADER_ROW_HEIGHT = 44;
 const SEARCH_BAR_HEIGHT = 48;
-const SEARCH_TOP_SPACING = 12;
+const SEARCH_TOP_SPACING = 20;
 const SEARCH_BOTTOM_SPACING = 16;
+const FILTER_TOP_SPACING = 12;
+const FILTER_ROW_HEIGHT = 40;
 const HEADER_RADIUS = 24;
 
+type SortOption = "newest" | "oldest" | "az" | "za";
+
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "az",     label: "A → Z" },
+  { value: "za",     label: "Z → A" },
+];
+
+const FILTER_STATUSES: ApplicationStatus[] = [
+  "saved",
+  "applied",
+  "screening",
+  "interviewing",
+  "offer",
+  "accepted",
+  "rejected",
+  "withdrawn",
+];
+
+const SEARCH_ONLY_HEIGHT = SEARCH_TOP_SPACING + SEARCH_BAR_HEIGHT;
+const FILTER_BLOCK_HEIGHT = FILTER_TOP_SPACING + FILTER_ROW_HEIGHT;
+
 const STATUS_LABEL: Record<ApplicationStatus, string> = {
-  saved:        "Saved",
-  applied:      "Applied",
-  screening:    "Screening",
+  saved: "Saved",
+  applied: "Applied",
+  screening: "Screening",
   interviewing: "Interviewing",
-  offer:        "Offer",
-  rejected:     "Rejected",
-  accepted:     "Accepted",
-  withdrawn:    "Withdrawn",
+  offer: "Offer",
+  rejected: "Rejected",
+  accepted: "Accepted",
+  withdrawn: "Withdrawn",
 };
 
 const STATUS_COLOR: Record<ApplicationStatus, string> = {
-  saved:        "#6B7280",
-  applied:      "#3B82F6",
-  screening:    "#8B5CF6",
+  saved: "#6B7280",
+  applied: "#3B82F6",
+  screening: "#8B5CF6",
   interviewing: "#10B981",
-  offer:        "#F59E0B",
-  rejected:     "#EF4444",
-  accepted:     "#13B9B5",
-  withdrawn:    "#9CA3AF",
+  offer: "#F59E0B",
+  rejected: "#EF4444",
+  accepted: "#13B9B5",
+  withdrawn: "#9CA3AF",
 };
 
 export default function ApplicationsScreen() {
@@ -58,19 +85,46 @@ export default function ApplicationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [pullOffset, setPullOffset] = useState(0);
   const [searchVisible, setSearchVisible] = useState(true);
+  const [selectedStatus, setSelectedStatus] = useState<ApplicationStatus | null>(null);
+  const [sortOption, setSortOption] = useState<SortOption>("newest");
   const [bounces, setBounces] = useState(true);
   const prevScrollOffsetRef = useRef(0);
   const scrollViewHeightRef = useRef(0);
   const contentHeightRef = useRef(0);
+  const searchAnim = useRef(new Animated.Value(1)).current;
 
   const { data: applications, isLoading, isError, refetch } = useApplications();
 
+  useEffect(() => {
+    Animated.timing(searchAnim, {
+      toValue: searchVisible ? 1 : 0,
+      duration: 280,
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [searchAnim, searchVisible]);
+
+  const searchContainerHeight = searchAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, SEARCH_ONLY_HEIGHT],
+    extrapolate: "clamp",
+  });
+  const searchOpacity = searchAnim.interpolate({
+    inputRange: [0, 0.35, 1],
+    outputRange: [0, 0, 1],
+    extrapolate: "clamp",
+  });
+
   const scrolled = scrollOffset > SCROLL_THRESHOLD;
   const headerTopPadding = insets.top + 8;
-  const headerHeight = headerTopPadding + HEADER_ROW_HEIGHT + HEADER_BOTTOM_PADDING;
-  const iconColor = scrolled ? "#1a1a2e" : "#FFFFFF";
-  const titleColor = scrolled ? "#1a1a2e" : "#FFFFFF";
-  const subtitleColor = scrolled ? color.PRIMARY : "#FFFFFF";
+  const collapsedHeaderHeight =
+    headerTopPadding + HEADER_ROW_HEIGHT + SEARCH_BOTTOM_SPACING + FILTER_BLOCK_HEIGHT;
+  const expandedHeaderHeight = collapsedHeaderHeight + SEARCH_ONLY_HEIGHT;
+  const animatedHeaderHeight = searchAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [collapsedHeaderHeight, expandedHeaderHeight],
+    extrapolate: "clamp",
+  });
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -82,20 +136,20 @@ export default function ApplicationsScreen() {
     const offsetY = event.nativeEvent.contentOffset.y;
     const delta = offsetY - prevScrollOffsetRef.current;
 
-    if (offsetY <= 0) {
+    const nearBottom =
+      offsetY + scrollViewHeightRef.current >= contentHeightRef.current - 50;
+
+    if (offsetY <= SCROLL_THRESHOLD) {
       setSearchVisible(true);
     } else if (delta > 0) {
       setSearchVisible(false);
-    } else if (delta < 0) {
+    } else if (delta < 0 && !nearBottom && offsetY < expandedHeaderHeight) {
       setSearchVisible(true);
     }
 
     prevScrollOffsetRef.current = offsetY;
     setScrollOffset(offsetY);
     setPullOffset(Math.max(0, -offsetY));
-
-    const nearBottom =
-      offsetY + scrollViewHeightRef.current >= contentHeightRef.current - 50;
     setBounces(!nearBottom);
   };
 
@@ -103,9 +157,32 @@ export default function ApplicationsScreen() {
   const loaderSpace = refreshing
     ? 40
     : Math.min(Math.max(0, pullOffset - 8), 56);
-  const searchAreaHeight = SEARCH_TOP_SPACING + SEARCH_BAR_HEIGHT + SEARCH_BOTTOM_SPACING;
-  const totalHeaderHeight = headerHeight + searchAreaHeight;
-  const topBackdropHeight = totalHeaderHeight + loaderSpace;
+
+  const statusCounts = useMemo(() => {
+    const counts: Partial<Record<ApplicationStatus, number>> = {};
+    applications?.forEach((app) => {
+      counts[app.status] = (counts[app.status] ?? 0) + 1;
+    });
+    return counts;
+  }, [applications]);
+
+  const filteredApplications = useMemo(() => {
+    if (!applications) return [];
+    const filtered = selectedStatus
+      ? applications.filter((app) => app.status === selectedStatus)
+      : applications;
+    return [...filtered].sort((a, b) => {
+      if (sortOption === "newest") return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      if (sortOption === "oldest") return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      if (sortOption === "az") return a.company.name.localeCompare(b.company.name);
+      return b.company.name.localeCompare(a.company.name);
+    });
+  }, [applications, selectedStatus, sortOption]);
+
+  function cycleSort() {
+    const idx = SORT_OPTIONS.findIndex((o) => o.value === sortOption);
+    setSortOption(SORT_OPTIONS[(idx + 1) % SORT_OPTIONS.length].value);
+  }
 
   const renderContent = () => {
     if (isLoading) {
@@ -134,20 +211,37 @@ export default function ApplicationsScreen() {
       );
     }
 
+    if (filteredApplications.length === 0) {
+      return (
+        <View style={styles.centerState}>
+          <Text style={styles.stateTitle}>No matching applications</Text>
+          <Text style={styles.stateBody}>Try a different filter.</Text>
+        </View>
+      );
+    }
+
     return (
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Your applications</Text>
-        {applications.map((app) => {
+        {filteredApplications.map((app) => {
           const badgeColor = STATUS_COLOR[app.status];
           return (
             <Pressable
               key={app.id}
-              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+              style={({ pressed }) => [
+                styles.card,
+                pressed && styles.cardPressed,
+              ]}
               onPress={() => router.push(`/application/${app.slug}`)}
             >
               <View style={styles.cardTop}>
                 <Text style={styles.cardCompany}>{app.company.name}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: badgeColor + "20" }]}>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    { backgroundColor: badgeColor + "20" },
+                  ]}
+                >
                   <Text style={[styles.statusText, { color: badgeColor }]}>
                     {STATUS_LABEL[app.status]}
                   </Text>
@@ -163,19 +257,18 @@ export default function ApplicationsScreen() {
 
   return (
     <View style={styles.container}>
-      <View
-        style={[styles.topBackdrop, { height: topBackdropHeight }]}
-        pointerEvents="none"
-      />
-
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
         bounces={bounces}
-        onLayout={(e) => { scrollViewHeightRef.current = e.nativeEvent.layout.height; }}
-        onContentSizeChange={(_, h) => { contentHeightRef.current = h; }}
+        onLayout={(e) => {
+          scrollViewHeightRef.current = e.nativeEvent.layout.height;
+        }}
+        onContentSizeChange={(_, h) => {
+          contentHeightRef.current = h;
+        }}
         onScroll={handleScroll}
         refreshControl={
           <RefreshControl
@@ -187,54 +280,56 @@ export default function ApplicationsScreen() {
           />
         }
       >
-        <View style={{ height: totalHeaderHeight, backgroundColor: color.PRIMARY }} />
+        <Animated.View
+          style={{
+            height: animatedHeaderHeight,
+            backgroundColor: "#FFFFFF",
+          }}
+        />
         <View style={styles.heroShell}>
           <View style={styles.heroSection} />
-          <View style={styles.content}>
-            {renderContent()}
-          </View>
+          <View style={styles.content}>{renderContent()}</View>
         </View>
       </ScrollView>
 
       {loaderSpace > 0 && (
-        <View
-          style={[styles.refreshLoader, { top: totalHeaderHeight, height: loaderSpace }]}
+        <Animated.View
+          style={[
+            styles.refreshLoader,
+            { top: animatedHeaderHeight, height: loaderSpace },
+          ]}
         >
-          {showRefreshLoader && <ActivityIndicator color="#FFFFFF" size="large" />}
-        </View>
+          {showRefreshLoader && (
+            <ActivityIndicator color={color.PRIMARY} size="large" />
+          )}
+        </Animated.View>
       )}
 
-      <View
+      <Animated.View
         style={[
           styles.header,
           {
             paddingTop: headerTopPadding,
-            paddingBottom: searchVisible ? SEARCH_BOTTOM_SPACING : HEADER_BOTTOM_PADDING,
-            backgroundColor: scrolled ? "#FFFFFF" : color.PRIMARY,
+            paddingBottom: SEARCH_BOTTOM_SPACING,
             ...(scrolled && styles.headerScrolled),
           },
         ]}
       >
         <View style={styles.headerRow}>
           <View style={styles.titleBlock}>
-            <Text style={[styles.title, { color: titleColor }]}>Applications</Text>
-            <Text style={[styles.subtitle, { color: subtitleColor }]}>
-              Track your progress
-            </Text>
+            <Text style={styles.title}>Applications</Text>
+            <Text style={styles.subtitle}>Track your progress</Text>
           </View>
-          <Pressable
-            style={[
-              styles.filterPill,
-              { borderColor: scrolled ? "#D1D5DB" : "rgba(255,255,255,0.45)" },
-            ]}
-            hitSlop={6}
-          >
-            <Text style={[styles.filterPillText, { color: iconColor }]}>All statuses</Text>
-            <IconChevronDown size={14} color={iconColor} strokeWidth={2.5} />
-          </Pressable>
         </View>
 
-        {searchVisible && (
+        <Animated.View
+          style={{
+            height: searchContainerHeight,
+            opacity: searchOpacity,
+            overflow: "hidden",
+          }}
+          pointerEvents={searchVisible ? "auto" : "none"}
+        >
           <View style={styles.searchBarInHeader}>
             <IconSearch size={30} color="#222222" strokeWidth={1.5} />
             <TextInput
@@ -244,8 +339,86 @@ export default function ApplicationsScreen() {
               returnKeyType="search"
             />
           </View>
-        )}
-      </View>
+
+        </Animated.View>
+
+        <ScrollView
+          horizontal
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterRow}
+          contentContainerStyle={styles.filterRowContent}
+        >
+          <Pressable style={styles.filterIconPill} hitSlop={4}>
+            <IconAdjustmentsHorizontal
+              size={18}
+              color="#1a1a2e"
+              strokeWidth={2}
+            />
+          </Pressable>
+
+          <Pressable
+            style={[styles.filterChip, sortOption !== "newest" && styles.filterChipActive]}
+            onPress={cycleSort}
+            hitSlop={4}
+          >
+            <Text style={[styles.filterChipText, sortOption !== "newest" && styles.filterChipTextActive]}>
+              {SORT_OPTIONS.find((o) => o.value === sortOption)!.label}
+            </Text>
+            <IconArrowsSort size={16} color={sortOption !== "newest" ? "#FFFFFF" : "#1a1a2e"} strokeWidth={2} />
+          </Pressable>
+
+          <Pressable
+            style={[
+              styles.filterChip,
+              selectedStatus === null && styles.filterChipActive,
+            ]}
+            onPress={() => setSelectedStatus(null)}
+            hitSlop={4}
+          >
+            <Text
+              style={[
+                styles.filterChipText,
+                selectedStatus === null && styles.filterChipTextActive,
+              ]}
+            >
+              All {applications?.length ?? 0}
+            </Text>
+          </Pressable>
+
+          {FILTER_STATUSES.map((status) => {
+            const count = statusCounts[status] ?? 0;
+            if (count === 0) return null;
+
+            const isActive = selectedStatus === status;
+            const statusColor = STATUS_COLOR[status];
+            return (
+              <Pressable
+                key={status}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: isActive
+                      ? statusColor
+                      : statusColor + "18",
+                  },
+                ]}
+                onPress={() => setSelectedStatus(isActive ? null : status)}
+                hitSlop={4}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    { color: isActive ? "#FFFFFF" : statusColor },
+                  ]}
+                >
+                  {STATUS_LABEL[status]} {count}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </Animated.View>
 
       <Pressable
         style={[styles.fab, { bottom: insets.bottom + 24 }]}
@@ -270,7 +443,7 @@ const styles = StyleSheet.create({
     zIndex: 10,
     flexDirection: "column",
     paddingHorizontal: 16,
-    borderBottomColor: "#E5E5E5",
+    backgroundColor: "#FFFFFF",
   },
   headerRow: {
     flexDirection: "row",
@@ -278,6 +451,8 @@ const styles = StyleSheet.create({
     height: HEADER_ROW_HEIGHT,
   },
   headerScrolled: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E5E5",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -291,36 +466,17 @@ const styles = StyleSheet.create({
     fontFamily: Hamburg.BOLD,
     fontSize: 18,
     letterSpacing: 0.2,
+    color: "#1a1a2e",
   },
   subtitle: {
     fontFamily: Hamburg.REGULAR,
     fontSize: 13,
     marginTop: 1,
-  },
-  filterPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  filterPillText: {
-    fontFamily: Hamburg.MEDIUM,
-    fontSize: 13,
+    color: color.PRIMARY,
   },
   scrollView: {
     flex: 1,
-    backgroundColor: color.PRIMARY,
-  },
-  topBackdrop: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: color.PRIMARY,
-    zIndex: 0,
+    backgroundColor: "#FFFFFF",
   },
   scrollContent: {
     flexGrow: 1,
@@ -336,7 +492,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heroSection: {
-    backgroundColor: color.PRIMARY,
+    backgroundColor: "#FFFFFF",
     height: 0,
     borderBottomLeftRadius: HEADER_RADIUS,
     borderBottomRightRadius: HEADER_RADIUS,
@@ -347,7 +503,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 9,
-    backgroundColor: color.PRIMARY,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -357,6 +513,44 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#1a1a2e",
     paddingVertical: 0,
+  },
+  filterRow: {
+    marginTop: FILTER_TOP_SPACING,
+    marginHorizontal: -16,
+    height: FILTER_ROW_HEIGHT,
+  },
+  filterRowContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+    alignItems: "center",
+  },
+  filterIconPill: {
+    width: FILTER_ROW_HEIGHT,
+    height: FILTER_ROW_HEIGHT,
+    borderRadius: FILTER_ROW_HEIGHT / 2,
+    backgroundColor: color.SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    height: FILTER_ROW_HEIGHT,
+    borderRadius: FILTER_ROW_HEIGHT / 2,
+    backgroundColor: color.SURFACE,
+    paddingHorizontal: 14,
+  },
+  filterChipActive: {
+    backgroundColor: "#1a1a2e",
+  },
+  filterChipText: {
+    fontFamily: Hamburg.MEDIUM,
+    fontSize: 14,
+    color: "#1a1a2e",
+  },
+  filterChipTextActive: {
+    color: "#FFFFFF",
   },
   heroShell: {
     flexGrow: 1,

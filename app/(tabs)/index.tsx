@@ -2,15 +2,12 @@ import {
   IconArrowRight,
   IconBell,
   IconRocket,
-  IconSearch,
   IconUser,
 } from "@tabler/icons-react-native";
 import { router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
-  Easing,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -18,7 +15,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -37,9 +33,6 @@ const SCROLL_THRESHOLD = 8;
 const PULL_THRESHOLD = 20;
 const HEADER_BOTTOM_PADDING = 12;
 const HEADER_ROW_HEIGHT = 44;
-const SEARCH_BAR_HEIGHT = 48;
-const SEARCH_TOP_SPACING = 12;
-const SEARCH_BOTTOM_SPACING = 16;
 const HEADER_RADIUS = 24;
 
 const STATUS_LABEL: Record<ApplicationStatus, string> = {
@@ -191,39 +184,12 @@ export default function HomeScreen() {
   const [scrollOffset, setScrollOffset] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [pullOffset, setPullOffset] = useState(0);
-  const [searchVisible, setSearchVisible] = useState(true);
   const [bounces, setBounces] = useState(true);
   const prevScrollOffsetRef = useRef(0);
   const scrollViewHeightRef = useRef(0);
   const contentHeightRef = useRef(0);
-  const searchAnim = useRef(new Animated.Value(1)).current;
 
   const { data, isLoading, isError, refetch } = useHomeSummary();
-
-  useEffect(() => {
-    Animated.timing(searchAnim, {
-      toValue: searchVisible ? 1 : 0,
-      duration: 280,
-      easing: Easing.bezier(0.4, 0, 0.2, 1),
-      useNativeDriver: false,
-    }).start();
-  }, [searchVisible]);
-
-  const searchContainerHeight = searchAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, SEARCH_TOP_SPACING + SEARCH_BAR_HEIGHT],
-    extrapolate: "clamp",
-  });
-  const searchOpacity = searchAnim.interpolate({
-    inputRange: [0, 0.35, 1],
-    outputRange: [0, 0, 1],
-    extrapolate: "clamp",
-  });
-  const headerPaddingBottom = searchAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [HEADER_BOTTOM_PADDING, SEARCH_BOTTOM_SPACING],
-    extrapolate: "clamp",
-  });
 
   const scrolled = scrollOffset > SCROLL_THRESHOLD;
   const headerTopPadding = insets.top + 8;
@@ -240,16 +206,6 @@ export default function HomeScreen() {
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    const delta = offsetY - prevScrollOffsetRef.current;
-
-    if (offsetY <= 0) {
-      setSearchVisible(true);
-    } else if (delta > 0) {
-      setSearchVisible(false);
-    } else if (delta < 0) {
-      setSearchVisible(true);
-    }
-
     prevScrollOffsetRef.current = offsetY;
     setScrollOffset(offsetY);
     setPullOffset(Math.max(0, -offsetY));
@@ -263,8 +219,7 @@ export default function HomeScreen() {
   const loaderSpace = refreshing
     ? 40
     : Math.min(Math.max(0, pullOffset - 8), 56);
-  const searchAreaHeight = SEARCH_TOP_SPACING + SEARCH_BAR_HEIGHT + SEARCH_BOTTOM_SPACING;
-  const totalHeaderHeight = headerHeight + searchAreaHeight;
+  const totalHeaderHeight = headerHeight;
   const topBackdropHeight = totalHeaderHeight + loaderSpace;
 
   // ── hero ──────────────────────────────────────────────────────────────────
@@ -367,12 +322,12 @@ export default function HomeScreen() {
         </View>
       )}
 
-      <Animated.View
+      <View
         style={[
           styles.header,
           {
             paddingTop: headerTopPadding,
-            paddingBottom: headerPaddingBottom,
+            paddingBottom: HEADER_BOTTOM_PADDING,
             backgroundColor: scrolled ? "#FFFFFF" : color.PRIMARY,
             borderBottomWidth: 0,
             ...(scrolled && styles.headerScrolled),
@@ -398,21 +353,7 @@ export default function HomeScreen() {
             </Pressable>
           </View>
         </View>
-
-        <Animated.View
-          style={{ height: searchContainerHeight, opacity: searchOpacity, overflow: "hidden" }}
-        >
-          <View style={styles.searchBarInHeader}>
-            <IconSearch size={30} color="#222222" strokeWidth={1.5} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search roles, companies..."
-              placeholderTextColor="#999999"
-              returnKeyType="search"
-            />
-          </View>
-        </Animated.View>
-      </Animated.View>
+      </View>
     </View>
   );
 }
@@ -648,16 +589,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
-  searchBarInHeader: {
-    marginTop: SEARCH_TOP_SPACING,
-    height: SEARCH_BAR_HEIGHT,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: color.SURFACE,
-    borderRadius: SEARCH_BAR_HEIGHT / 2,
-    paddingHorizontal: 16,
-    gap: 12,
-  },
   heroSection: {
     backgroundColor: color.PRIMARY,
     height: 280,
@@ -679,13 +610,6 @@ const styles = StyleSheet.create({
     backgroundColor: color.PRIMARY,
     alignItems: "center",
     justifyContent: "center",
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: Hamburg.REGULAR,
-    fontSize: 15,
-    color: "#1a1a2e",
-    paddingVertical: 0,
   },
   content: {
     flexGrow: 1,
