@@ -1,17 +1,29 @@
+import { color, Hamburg } from "@/assets/fonts/sharedStyles";
+import {
+  FollowUp,
+  useCompleteFollowUp,
+  useCreateFollowUp,
+  useDeleteFollowUp,
+  useFollowUps,
+  useUpdateFollowUp,
+} from "@/src/api/follow-up";
+import {
+  cancelFollowUpNotification,
+  scheduleFollowUpNotification,
+} from "@/src/notifications/follow-ups";
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
   BottomSheetScrollView,
   BottomSheetTextInput,
-  BottomSheetView,
 } from "@gorhom/bottom-sheet";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   IconBell,
   IconChecklist,
   IconPlus,
   IconTrash,
 } from "@tabler/icons-react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -25,19 +37,6 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  FollowUp,
-  useCompleteFollowUp,
-  useCreateFollowUp,
-  useDeleteFollowUp,
-  useFollowUps,
-  useUpdateFollowUp,
-} from "@/src/api/follow-up";
-import {
-  cancelFollowUpNotification,
-  scheduleFollowUpNotification,
-} from "@/src/notifications/follow-ups";
-import { color, Hamburg } from "@/assets/fonts/sharedStyles";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -66,9 +65,15 @@ function groupFollowUps(items: FollowUp[]) {
   return { overdue, today, upcoming };
 }
 
-function formatDue(iso: string, group: "overdue" | "today" | "upcoming"): string {
+function formatDue(
+  iso: string,
+  group: "overdue" | "today" | "upcoming",
+): string {
   const d = new Date(iso);
-  const hhmm = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const hhmm = d.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
   if (group === "today") return hhmm;
 
@@ -86,8 +91,7 @@ function formatDue(iso: string, group: "overdue" | "today" | "upcoming"): string
   const dayAfterTomorrow = new Date(tomorrowStart);
   dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
 
-  if (d < dayAfterTomorrow)
-    return `Tomorrow, ${hhmm}`;
+  if (d < dayAfterTomorrow) return `Tomorrow, ${hhmm}`;
 
   return (
     d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) +
@@ -136,7 +140,7 @@ export default function FollowUpsScreen() {
         pressBehavior="close"
       />
     ),
-    []
+    [],
   );
 
   const onRefresh = useCallback(async () => {
@@ -193,7 +197,7 @@ export default function FollowUpsScreen() {
             });
           },
         },
-      ]
+      ],
     );
   }
 
@@ -208,19 +212,22 @@ export default function FollowUpsScreen() {
             sheetRef.current?.dismiss();
             scheduleFollowUpNotification(created);
           },
-        }
+        },
       );
     } else {
       updateFollowUp(
-        { id: editingId!, data: { title: formTitle.trim(), due_at: formDate.toISOString() } },
+        {
+          id: editingId!,
+          data: { title: formTitle.trim(), due_at: formDate.toISOString() },
+        },
         {
           onSuccess: (updated) => {
             sheetRef.current?.dismiss();
             cancelFollowUpNotification(updated.id).then(() =>
-              scheduleFollowUpNotification(updated)
+              scheduleFollowUpNotification(updated),
             );
           },
-        }
+        },
       );
     }
   }
@@ -231,7 +238,10 @@ export default function FollowUpsScreen() {
     <View style={styles.root}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 80 }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + 80 },
+        ]}
         alwaysBounceVertical
         refreshControl={
           <RefreshControl
@@ -258,13 +268,16 @@ export default function FollowUpsScreen() {
         {!isLoading && !hasAny && (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
-              <IconChecklist size={36} color={color.PRIMARY} strokeWidth={1.5} />
+              <IconChecklist
+                size={36}
+                color={color.PRIMARY}
+                strokeWidth={1.5}
+              />
             </View>
-            <Text style={styles.emptyTitle}>Nothing to chase right now</Text>
+            <Text style={styles.emptyTitle}>Nothing -- to chase right now</Text>
             <Text style={styles.emptyBody}>
-              Tap the{" "}
-              <Text style={{ fontFamily: undefined }}>+</Text>
-              {" "}button to set a reminder.
+              Tap the <Text style={{ fontFamily: undefined }}>+</Text> button to
+              set a reminder.
             </Text>
           </View>
         )}
@@ -339,7 +352,10 @@ export default function FollowUpsScreen() {
         keyboardBlurBehavior="restore"
       >
         <BottomSheetScrollView
-          contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + 24 }]}
+          contentContainerStyle={[
+            styles.sheetContent,
+            { paddingBottom: insets.bottom + 24 },
+          ]}
           keyboardShouldPersistTaps="handled"
         >
           <Text style={styles.sheetTitle}>
@@ -423,7 +439,12 @@ export default function FollowUpsScreen() {
                 if (selected) {
                   setFormDate((prev) => {
                     const next = new Date(prev);
-                    next.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
+                    next.setHours(
+                      selected.getHours(),
+                      selected.getMinutes(),
+                      0,
+                      0,
+                    );
                     return next;
                   });
                 }
@@ -433,7 +454,10 @@ export default function FollowUpsScreen() {
 
           {/* Save */}
           <Pressable
-            style={[styles.saveBtn, (!formTitle.trim() || isSaving) && styles.saveBtnDisabled]}
+            style={[
+              styles.saveBtn,
+              (!formTitle.trim() || isSaving) && styles.saveBtnDisabled,
+            ]}
             onPress={handleSubmit}
             disabled={!formTitle.trim() || isSaving}
           >
@@ -470,7 +494,9 @@ function Section({
 }) {
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, overdue && styles.sectionTitleOverdue]}>
+      <Text
+        style={[styles.sectionTitle, overdue && styles.sectionTitleOverdue]}
+      >
         {title}
       </Text>
       <View style={styles.sectionCard}>{children}</View>
@@ -501,7 +527,10 @@ function FollowUpRow({
       {/* Checkbox */}
       <Pressable style={styles.checkboxOuter} onPress={onCheck} hitSlop={12}>
         <View
-          style={[styles.checkboxInner, group === "overdue" && styles.checkboxOverdue]}
+          style={[
+            styles.checkboxInner,
+            group === "overdue" && styles.checkboxOverdue,
+          ]}
         />
       </Pressable>
 
@@ -585,7 +614,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontFamily: Hamburg.BOLD,
-    fontSize: 18,
+    fontSize: 78,
     color: "#1a1a2e",
     textAlign: "center",
   },
