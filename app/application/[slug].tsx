@@ -1,20 +1,26 @@
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
+  BottomSheetTextInput,
   BottomSheetView,
 } from "@gorhom/bottom-sheet";
 import {
   IconArrowLeft,
   IconBriefcase,
+  IconBell,
   IconCalendar,
   IconCheck,
   IconMapPin,
+  IconPlus,
   IconRadar,
+  IconTrash,
 } from "@tabler/icons-react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,13 +28,24 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ApplicationStatus,
   StatusChange,
   useApplication,
+  useDeleteApplication,
   useUpdateStatus,
 } from "@/src/api/job-application";
+import {
+  FollowUp,
+  useCompleteFollowUp,
+  useCreateFollowUp,
+  useFollowUps,
+} from "@/src/api/follow-up";
+import {
+  cancelFollowUpNotification,
+  scheduleFollowUpNotification,
+} from "@/src/notifications/follow-ups";
 import { color, Hamburg } from "@/assets/fonts/sharedStyles";
 
 const ALL_STATUSES: ApplicationStatus[] = [
@@ -88,11 +105,35 @@ function timeAgo(iso: string): string {
   });
 }
 
+function defaultFuDate(): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(9, 0, 0, 0);
+  return d;
+}
+
 export default function ApplicationDetailScreen() {
   const insets = useSafeAreaInsets();
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const { data: app, isLoading, isError } = useApplication(slug || undefined);
   const { mutate: updateStatus, isPending } = useUpdateStatus(slug ?? "");
+  const { mutate: deleteApplication, isPending: isDeleting } = useDeleteApplication();
+
+  // Follow-ups for this application
+  const { data: allFollowUps = [] } = useFollowUps();
+  const appFollowUps = useMemo(
+    () => allFollowUps.filter((f) => f.job_application?.slug === slug),
+    [allFollowUps, slug]
+  );
+  const { mutate: completeFollowUp } = useCompleteFollowUp();
+  const { mutate: createFollowUp, isPending: isCreatingFollowUp } = useCreateFollowUp();
+
+  // Add follow-up sheet
+  const addFuSheetRef = useRef<BottomSheetModal>(null);
+  const [fuTitle, setFuTitle] = useState("");
+  const [fuDate, setFuDate] = useState<Date>(defaultFuDate);
+  const [showFuDatePicker, setShowFuDatePicker] = useState(false);
+  const [showFuTimePicker, setShowFuTimePicker] = useState(false);
 
   const sheetRef = useRef<BottomSheetModal>(null);
 
@@ -111,6 +152,56 @@ export default function ApplicationDetailScreen() {
         Alert.alert("Error", err.message ?? "Could not update status.");
       },
     });
+  }
+
+  function handleCompleteFollowUp(fu: FollowUp) {
+    completeFollowUp(fu.id, {
+      onSuccess: () => {
+        cancelFollowUpNotification(fu.id);
+      },
+    });
+  }
+
+  function openAddFollowUp() {
+    setFuTitle("");
+    setFuDate(defaultFuDate());
+    setShowFuDatePicker(false);
+    setShowFuTimePicker(false);
+    addFuSheetRef.current?.present();
+  }
+
+  function handleAddFollowUp() {
+    if (!fuTitle.trim() || !slug) return;
+    createFollowUp(
+      { title: fuTitle.trim(), due_at: fuDate.toISOString(), application_slug: slug },
+      {
+        onSuccess: (created) => {
+          addFuSheetRef.current?.dismiss();
+          scheduleFollowUpNotification(created);
+        },
+      }
+    );
+  }
+
+  function confirmDelete() {
+    if (!slug) return;
+    Alert.alert(
+      "Delete application",
+      "This will permanently delete this application and all its status history.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            deleteApplication(slug, {
+              onSuccess: () => router.back(),
+              onError: () => Alert.alert("Error", "Could not delete application."),
+            });
+          },
+        },
+      ]
+    );
   }
 
   const renderBody = () => {
@@ -199,6 +290,45 @@ export default function ApplicationDetailScreen() {
             ))
           )}
         </View>
+
+        {/* Follow-ups */}
+        <View style={styles.timelineCard}>
+          <View style={styles.fuHeader}>
+            <Text style={styles.timelineTitle}>
+              Follow<Text style={{ fontFamily: undefined }}>-</Text>ups
+            </Text>
+            <Pressable onPress={openAddFollowUp} hitSlop={8} style={styles.fuAddBtn}>
+              <IconPlus size={16} color={color.PRIMARY} strokeWidth={2.5} />
+            </Pressable>
+          </View>
+          {appFollowUps.length === 0 ? (
+            <Text style={styles.timelineEmpty}>No reminders set.</Text>
+          ) : (
+            appFollowUps.map((fu) => (
+              <AppFollowUpRow
+                key={fu.id}
+                item={fu}
+                onComplete={() => handleCompleteFollowUp(fu)}
+              />
+            ))
+          )}
+        </View>
+
+        {/* Delete */}
+        <Pressable
+          style={[styles.deleteAppBtn, isDeleting && styles.deleteAppBtnDisabled]}
+          onPress={confirmDelete}
+          disabled={isDeleting}
+        >
+          {isDeleting ? (
+            <ActivityIndicator color="#EF4444" size="small" />
+          ) : (
+            <>
+              <IconTrash size={16} color="#EF4444" strokeWidth={1.75} />
+              <Text style={styles.deleteAppBtnText}>Delete application</Text>
+            </>
+          )}
+        </Pressable>
       </ScrollView>
     );
   };
@@ -249,6 +379,147 @@ export default function ApplicationDetailScreen() {
           })}
         </BottomSheetView>
       </BottomSheetModal>
+
+      {/* Add follow-up sheet */}
+      <BottomSheetModal
+        ref={addFuSheetRef}
+        enableDynamicSizing
+        backdropComponent={renderBackdrop}
+        handleIndicatorStyle={styles.sheetHandle}
+        backgroundStyle={styles.sheetBackground}
+        keyboardBehavior="interactive"
+        keyboardBlurBehavior="restore"
+      >
+        <BottomSheetView
+          style={[styles.sheetContent, { paddingBottom: insets.bottom + 24 }]}
+        >
+          <Text style={styles.sheetTitle}>New reminder</Text>
+
+          <BottomSheetTextInput
+            style={styles.fuInput}
+            placeholder="What do you need to follow up on?"
+            placeholderTextColor="#BBBBBB"
+            value={fuTitle}
+            onChangeText={setFuTitle}
+            returnKeyType="done"
+            autoFocus
+          />
+
+          <View style={styles.fuDateRow}>
+            <Pressable
+              style={styles.fuDatePart}
+              onPress={() => {
+                setShowFuTimePicker(false);
+                setShowFuDatePicker((v) => !v);
+              }}
+            >
+              <Text style={styles.fuDateLabel}>Date</Text>
+              <Text style={styles.fuDateValue}>
+                {fuDate.toLocaleDateString("en-GB", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.fuDatePart}
+              onPress={() => {
+                setShowFuDatePicker(false);
+                setShowFuTimePicker((v) => !v);
+              }}
+            >
+              <Text style={styles.fuDateLabel}>Time</Text>
+              <Text style={styles.fuDateValue}>
+                {fuDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+              </Text>
+            </Pressable>
+          </View>
+
+          {showFuDatePicker && (
+            <DateTimePicker
+              value={fuDate}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              minimumDate={new Date()}
+              onChange={(_, selected) => {
+                setShowFuDatePicker(Platform.OS === "ios");
+                if (selected) {
+                  setFuDate((prev) => {
+                    const next = new Date(selected);
+                    next.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                    return next;
+                  });
+                }
+              }}
+            />
+          )}
+
+          {showFuTimePicker && (
+            <DateTimePicker
+              value={fuDate}
+              mode="time"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={(_, selected) => {
+                setShowFuTimePicker(Platform.OS === "ios");
+                if (selected) {
+                  setFuDate((prev) => {
+                    const next = new Date(prev);
+                    next.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
+                    return next;
+                  });
+                }
+              }}
+            />
+          )}
+
+          <Pressable
+            style={[
+              styles.fuSaveBtn,
+              (!fuTitle.trim() || isCreatingFollowUp) && styles.fuSaveBtnDisabled,
+            ]}
+            onPress={handleAddFollowUp}
+            disabled={!fuTitle.trim() || isCreatingFollowUp}
+          >
+            {isCreatingFollowUp ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={styles.fuSaveBtnText}>Save reminder</Text>
+            )}
+          </Pressable>
+        </BottomSheetView>
+      </BottomSheetModal>
+    </View>
+  );
+}
+
+function AppFollowUpRow({
+  item,
+  onComplete,
+}: {
+  item: FollowUp;
+  onComplete: () => void;
+}) {
+  const dueDate = new Date(item.due_at);
+  const isOverdue = dueDate < new Date();
+  const timeColor = isOverdue ? "#EF4444" : "#999999";
+  const timeStr = dueDate.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+  }) + " " + dueDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <View style={styles.fuRow}>
+      <Pressable style={styles.fuCheckbox} onPress={onComplete} hitSlop={10}>
+        <View style={[styles.fuCheckboxInner, isOverdue && styles.fuCheckboxOverdue]} />
+      </Pressable>
+      <View style={styles.fuRowBody}>
+        <Text style={styles.fuRowTitle} numberOfLines={2}>{item.title}</Text>
+        <View style={styles.fuRowTimeLine}>
+          <IconBell size={11} color={timeColor} strokeWidth={1.75} />
+          <Text style={[styles.fuRowTime, { color: timeColor }]}> {timeStr}</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -486,6 +757,136 @@ const styles = StyleSheet.create({
     color: "#AAAAAA",
   },
 
+  // Follow-ups section
+  fuHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  fuAddBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "#EEF9F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fuRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#F0F0F0",
+  },
+  fuCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#D0D0D0",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  fuCheckboxInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "transparent",
+  },
+  fuCheckboxOverdue: {
+    backgroundColor: "#FECACA",
+  },
+  fuRowBody: {
+    flex: 1,
+    gap: 3,
+  },
+  fuRowTitle: {
+    fontFamily: Hamburg.MEDIUM,
+    fontSize: 14,
+    color: "#1a1a2e",
+  },
+  fuRowTimeLine: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  fuRowTime: {
+    fontFamily: Hamburg.REGULAR,
+    fontSize: 12,
+  },
+  // Delete application button
+  deleteAppBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
+    backgroundColor: "#FFF5F5",
+    marginTop: 4,
+  },
+  deleteAppBtnDisabled: {
+    opacity: 0.5,
+  },
+  deleteAppBtnText: {
+    fontFamily: Hamburg.MEDIUM,
+    fontSize: 14,
+    color: "#EF4444",
+  },
+  // Add follow-up form
+  fuInput: {
+    fontFamily: Hamburg.REGULAR,
+    fontSize: 15,
+    color: "#1a1a2e",
+    backgroundColor: "#F5F5F5",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  fuDateRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 16,
+  },
+  fuDatePart: {
+    flex: 1,
+    backgroundColor: "#F5F5F5",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  fuDateLabel: {
+    fontFamily: Hamburg.REGULAR,
+    fontSize: 11,
+    color: "#999999",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  fuDateValue: {
+    fontFamily: Hamburg.MEDIUM,
+    fontSize: 14,
+    color: "#1a1a2e",
+  },
+  fuSaveBtn: {
+    backgroundColor: color.PRIMARY,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  fuSaveBtnDisabled: {
+    opacity: 0.4,
+  },
+  fuSaveBtnText: {
+    fontFamily: Hamburg.BOLD,
+    fontSize: 15,
+    color: "#FFFFFF",
+  },
   // Bottom sheet
   sheetHandle: {
     backgroundColor: "#E0E0E0",

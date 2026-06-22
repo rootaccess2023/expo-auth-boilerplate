@@ -58,6 +58,8 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ status }),
     }),
+  remove: (slug: string) =>
+    request<void>(`/job_applications/${slug}`, { method: "DELETE" }),
 };
 
 export function useApplication(slug: string | undefined) {
@@ -81,6 +83,17 @@ export function useCreateApplication() {
     mutationFn: api.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    },
+  });
+}
+
+export function useDeleteApplication() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.remove,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["home_summary"] });
     },
   });
 }
