@@ -1,16 +1,14 @@
 import { ApplicationStatus, useApplications } from "@/src/api/job-application";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import {
-  IconAdjustmentsHorizontal,
   IconArrowsSort,
   IconPlus,
   IconSearch,
 } from "@tabler/icons-react-native";
 import { router } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
-  Easing,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -21,8 +19,18 @@ import {
   TextInput,
   View,
 } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { color, Hamburg } from "../../assets/fonts/sharedStyles";
+import SortModal, {
+  SORT_OPTIONS,
+  SortOption,
+} from "../application/components/SortModal";
 
 const SCROLL_THRESHOLD = 8;
 const PULL_THRESHOLD = 20;
@@ -33,15 +41,6 @@ const SEARCH_BOTTOM_SPACING = 16;
 const FILTER_TOP_SPACING = 12;
 const FILTER_ROW_HEIGHT = 40;
 const HEADER_RADIUS = 24;
-
-type SortOption = "newest" | "oldest" | "az" | "za";
-
-const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: "newest", label: "Newest" },
-  { value: "oldest", label: "Oldest" },
-  { value: "az",     label: "A → Z" },
-  { value: "za",     label: "Z → A" },
-];
 
 const FILTER_STATUSES: ApplicationStatus[] = [
   "saved",
@@ -84,47 +83,35 @@ export default function ApplicationsScreen() {
   const [scrollOffset, setScrollOffset] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [pullOffset, setPullOffset] = useState(0);
-  const [searchVisible, setSearchVisible] = useState(true);
-  const [selectedStatus, setSelectedStatus] = useState<ApplicationStatus | null>(null);
+  const [selectedStatus, setSelectedStatus] =
+    useState<ApplicationStatus | null>(null);
   const [sortOption, setSortOption] = useState<SortOption>("newest");
   const [bounces, setBounces] = useState(true);
-  const prevScrollOffsetRef = useRef(0);
   const scrollViewHeightRef = useRef(0);
   const contentHeightRef = useRef(0);
-  const searchAnim = useRef(new Animated.Value(1)).current;
+  const sortSheetRef = useRef<BottomSheetModal>(null);
+  const searchProgress = useSharedValue(1);
+  const prevScrollY = useRef(0);
+  const searchVisible = useRef(true);
 
   const { data: applications, isLoading, isError, refetch } = useApplications();
 
-  useEffect(() => {
-    Animated.timing(searchAnim, {
-      toValue: searchVisible ? 1 : 0,
-      duration: 280,
-      easing: Easing.bezier(0.4, 0, 0.2, 1),
-      useNativeDriver: false,
-    }).start();
-  }, [searchAnim, searchVisible]);
-
-  const searchContainerHeight = searchAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, SEARCH_ONLY_HEIGHT],
-    extrapolate: "clamp",
-  });
-  const searchOpacity = searchAnim.interpolate({
-    inputRange: [0, 0.35, 1],
-    outputRange: [0, 0, 1],
-    extrapolate: "clamp",
-  });
-
   const scrolled = scrollOffset > SCROLL_THRESHOLD;
   const headerTopPadding = insets.top + 8;
-  const collapsedHeaderHeight =
-    headerTopPadding + HEADER_ROW_HEIGHT + SEARCH_BOTTOM_SPACING + FILTER_BLOCK_HEIGHT;
-  const expandedHeaderHeight = collapsedHeaderHeight + SEARCH_ONLY_HEIGHT;
-  const animatedHeaderHeight = searchAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [collapsedHeaderHeight, expandedHeaderHeight],
-    extrapolate: "clamp",
-  });
+  const baseHeaderHeight =
+    headerTopPadding +
+    HEADER_ROW_HEIGHT +
+    SEARCH_BOTTOM_SPACING +
+    FILTER_BLOCK_HEIGHT;
+  const totalHeaderHeight = baseHeaderHeight + SEARCH_ONLY_HEIGHT;
+
+  const spacerStyle = useAnimatedStyle(() => ({
+    height: baseHeaderHeight + searchProgress.value * SEARCH_ONLY_HEIGHT,
+  }));
+  const searchContainerStyle = useAnimatedStyle(() => ({
+    height: searchProgress.value * SEARCH_ONLY_HEIGHT,
+    opacity: searchProgress.value,
+  }));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -134,23 +121,31 @@ export default function ApplicationsScreen() {
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    const delta = offsetY - prevScrollOffsetRef.current;
-
-    const nearBottom =
-      offsetY + scrollViewHeightRef.current >= contentHeightRef.current - 50;
-
-    if (offsetY <= SCROLL_THRESHOLD) {
-      setSearchVisible(true);
-    } else if (delta > 0) {
-      setSearchVisible(false);
-    } else if (delta < 0 && !nearBottom && offsetY < expandedHeaderHeight) {
-      setSearchVisible(true);
-    }
-
-    prevScrollOffsetRef.current = offsetY;
+    const prevY = prevScrollY.current;
+    prevScrollY.current = offsetY;
     setScrollOffset(offsetY);
     setPullOffset(Math.max(0, -offsetY));
+    const nearBottom = offsetY + scrollViewHeightRef.current >= contentHeightRef.current - 50;
     setBounces(!nearBottom);
+
+    let shouldShow: boolean;
+    if (offsetY <= SCROLL_THRESHOLD) {
+      shouldShow = true;
+    } else if (offsetY > prevY + 2) {
+      shouldShow = false;
+    } else if (offsetY < prevY - 2 && !nearBottom) {
+      shouldShow = true;
+    } else {
+      return;
+    }
+
+    if (shouldShow === searchVisible.current) return;
+    searchVisible.current = shouldShow;
+
+    searchProgress.value = withTiming(shouldShow ? 1 : 0, {
+      duration: 280,
+      easing: Easing.inOut(Easing.ease),
+    });
   };
 
   const showRefreshLoader = refreshing || pullOffset > PULL_THRESHOLD;
@@ -172,17 +167,19 @@ export default function ApplicationsScreen() {
       ? applications.filter((app) => app.status === selectedStatus)
       : applications;
     return [...filtered].sort((a, b) => {
-      if (sortOption === "newest") return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      if (sortOption === "oldest") return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      if (sortOption === "az") return a.company.name.localeCompare(b.company.name);
+      if (sortOption === "newest")
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      if (sortOption === "oldest")
+        return (
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+      if (sortOption === "az")
+        return a.company.name.localeCompare(b.company.name);
       return b.company.name.localeCompare(a.company.name);
     });
   }, [applications, selectedStatus, sortOption]);
-
-  function cycleSort() {
-    const idx = SORT_OPTIONS.findIndex((o) => o.value === sortOption);
-    setSortOption(SORT_OPTIONS[(idx + 1) % SORT_OPTIONS.length].value);
-  }
 
   const renderContent = () => {
     if (isLoading) {
@@ -280,12 +277,7 @@ export default function ApplicationsScreen() {
           />
         }
       >
-        <Animated.View
-          style={{
-            height: animatedHeaderHeight,
-            backgroundColor: "#FFFFFF",
-          }}
-        />
+        <Animated.View style={[{ backgroundColor: "#FFFFFF" }, spacerStyle]} />
         <View style={styles.heroShell}>
           <View style={styles.heroSection} />
           <View style={styles.content}>{renderContent()}</View>
@@ -293,19 +285,19 @@ export default function ApplicationsScreen() {
       </ScrollView>
 
       {loaderSpace > 0 && (
-        <Animated.View
+        <View
           style={[
             styles.refreshLoader,
-            { top: animatedHeaderHeight, height: loaderSpace },
+            { top: totalHeaderHeight, height: loaderSpace },
           ]}
         >
           {showRefreshLoader && (
             <ActivityIndicator color={color.PRIMARY} size="large" />
           )}
-        </Animated.View>
+        </View>
       )}
 
-      <Animated.View
+      <View
         style={[
           styles.header,
           {
@@ -322,14 +314,7 @@ export default function ApplicationsScreen() {
           </View>
         </View>
 
-        <Animated.View
-          style={{
-            height: searchContainerHeight,
-            opacity: searchOpacity,
-            overflow: "hidden",
-          }}
-          pointerEvents={searchVisible ? "auto" : "none"}
-        >
+        <Animated.View style={[{ overflow: 'hidden' }, searchContainerStyle]}>
           <View style={styles.searchBarInHeader}>
             <IconSearch size={30} color="#222222" strokeWidth={1.5} />
             <TextInput
@@ -339,7 +324,6 @@ export default function ApplicationsScreen() {
               returnKeyType="search"
             />
           </View>
-
         </Animated.View>
 
         <ScrollView
@@ -349,23 +333,27 @@ export default function ApplicationsScreen() {
           style={styles.filterRow}
           contentContainerStyle={styles.filterRowContent}
         >
-          <Pressable style={styles.filterIconPill} hitSlop={4}>
-            <IconAdjustmentsHorizontal
-              size={18}
-              color="#1a1a2e"
-              strokeWidth={2}
-            />
-          </Pressable>
-
-          <Pressable
-            style={[styles.filterChip, sortOption !== "newest" && styles.filterChipActive]}
-            onPress={cycleSort}
+<Pressable
+            style={[
+              styles.filterChip,
+              sortOption !== "newest" && styles.filterChipActive,
+            ]}
+            onPress={() => sortSheetRef.current?.present()}
             hitSlop={4}
           >
-            <Text style={[styles.filterChipText, sortOption !== "newest" && styles.filterChipTextActive]}>
+            <Text
+              style={[
+                styles.filterChipText,
+                sortOption !== "newest" && styles.filterChipTextActive,
+              ]}
+            >
               {SORT_OPTIONS.find((o) => o.value === sortOption)!.label}
             </Text>
-            <IconArrowsSort size={16} color={sortOption !== "newest" ? "#FFFFFF" : "#1a1a2e"} strokeWidth={2} />
+            <IconArrowsSort
+              size={16}
+              color={sortOption !== "newest" ? "#FFFFFF" : "#1a1a2e"}
+              strokeWidth={2}
+            />
           </Pressable>
 
           <Pressable
@@ -418,7 +406,7 @@ export default function ApplicationsScreen() {
             );
           })}
         </ScrollView>
-      </Animated.View>
+      </View>
 
       <Pressable
         style={[styles.fab, { bottom: insets.bottom + 24 }]}
@@ -426,6 +414,15 @@ export default function ApplicationsScreen() {
       >
         <IconPlus size={26} color="#FFFFFF" strokeWidth={2} />
       </Pressable>
+
+      <SortModal
+        ref={sortSheetRef}
+        sortOption={sortOption}
+        onSelect={(opt) => {
+          setSortOption(opt);
+          sortSheetRef.current?.dismiss();
+        }}
+      />
     </View>
   );
 }
@@ -523,14 +520,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 8,
     alignItems: "center",
-  },
-  filterIconPill: {
-    width: FILTER_ROW_HEIGHT,
-    height: FILTER_ROW_HEIGHT,
-    borderRadius: FILTER_ROW_HEIGHT / 2,
-    backgroundColor: color.SURFACE,
-    alignItems: "center",
-    justifyContent: "center",
   },
   filterChip: {
     flexDirection: "row",
